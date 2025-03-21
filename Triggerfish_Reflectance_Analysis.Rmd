@@ -475,3 +475,117 @@ source("simulate_picasso_data.R")
 source("simulate_hawaiian_fish.R")
 # This creates a dataset with reflectance measurements for 51 Hawaiian reef fish species
 # The data is saved to "Hawaiian_Reef_Fish_Reflectance.csv"
+
+# 5.0 Hawaiian Fish Spectral Analysis
+## 5.1 Load and Process Hawaiian Fish Data
+```{r load-hawaiian-data}
+hawaiian_data <- read.csv("Hawaiian_Reef_Fish_Reflectance.csv")
+
+# Define color mapping including UV representation
+hawaiian_colors <- c(
+  "UV" = "darkviolet",
+  "Violet" = "mediumorchid",
+  "Blue" = "dodgerblue",
+  "Green" = "seagreen",
+  "Yellow" = "gold",
+  "Orange" = "darkorange",
+  "Red" = "firebrick",
+  "Brown/Olive" = "olivedrab",
+  "Black" = "gray20",
+  "White" = "gray90",
+  "Blue/UV" = "dodgerblue4",
+  "Yellow/UV" = "darkgoldenrod",
+  "Orange-UV" = "darkorange4",
+  "Red/UV" = "darkred",
+  "Blue/red" = "mediumvioletred",
+  "Labriform-green" = "mediumseagreen",
+  "Labriform-purple" = "mediumpurple"
+)
+```
+
+## 5.2 Figure 5.2-1: Hawaiian Fish Mean Spectra
+```{r fig-5.2-1, fig.height=30, fig.width=20, out.width='100%'}
+# Calculate mean spectra per species and patch
+hawaiian_means <- hawaiian_data %>%
+  group_by(Species, Patch, Wavelength) %>%
+  summarise(
+    Mean = mean(Reflectance),
+    SD = sd(Reflectance),
+    .groups = "drop"
+  )
+
+# Get unique species and calculate number of panels needed
+species_list <- unique(hawaiian_means$Species)
+n_species <- length(species_list)
+n_cols <- 2  # Two columns of panels
+n_rows <- ceiling(n_species/n_cols)
+
+# Create multi-panel plot with larger margins
+par(mfrow = c(n_rows, n_cols), 
+    mar = c(4, 4, 3, 2),  # Increased margins
+    oma = c(2, 2, 2, 1))  # Added outer margins
+
+for(species in species_list) {
+  species_data <- hawaiian_means %>%
+    dplyr::filter(Species == species)
+  
+  # Plot with larger title margins and increased text size
+  plot(NULL, xlim = c(400, 800), ylim = c(0, 100),
+       xlab = "", ylab = "",
+       main = gsub("_", " ", species),
+       cex.main = 1.2,  # Larger title
+       cex.axis = 1.1)  # Larger axis labels
+  
+  # Add grid
+  grid(nx = NULL, ny = NULL, col = "lightgray", lty = "dotted")
+  
+  # Plot each patch
+  for(patch in unique(species_data$Patch)) {
+    patch_data <- species_data %>%
+      dplyr::filter(Patch == patch)
+    
+    lines(patch_data$Wavelength, patch_data$Mean,
+          col = hawaiian_colors[patch],
+          lwd = 2.5)  # Thicker lines
+  }
+  
+  # Add legend if it's the first plot
+  if(species == species_list[1]) {
+    patches <- unique(species_data$Patch)
+    legend("topright", legend = patches,
+           col = hawaiian_colors[patches],
+           lwd = 2.5, cex = 1,  # Larger legend text
+           bg = "white", # White background
+           box.lwd = 0.5)
+  }
+  
+  # Add axis labels to bottom and left panels only
+  if(which(species_list == species) > n_species - n_cols) {
+    title(xlab = "Wavelength (nm)", line = 2.5, cex.lab = 1.2)
+  }
+  if(which(species_list == species) %% n_cols == 1) {
+    title(ylab = "Reflectance (%)", line = 2.5, cex.lab = 1.2)
+  }
+}
+
+# Add overall title
+mtext("Hawaiian Fish Spectral Signatures", 
+      outer = TRUE, line = 0.5, 
+      cex = 1.5, font = 2)
+
+# Reset par
+par(mfrow = c(1, 1))
+```
+
+**Breakdown**:
+- **Step 1**: Load Hawaiian fish data and define color mapping for all patch types.
+- **Step 2**: Calculate mean spectra per species and patch (averaging across individuals and replicates).
+- **Step 3**: Create multi-panel plot (2 columns) showing each species' patches.
+- **Why**: Provides overview of spectral diversity across Hawaiian fish species.
+- **Key Features**:
+  - UV patches shown in deep purple
+  - Complex patches (e.g., Blue/UV) shown in darker variant of primary color
+  - Grid lines aid in reading values
+  - Legend on first panel shows patch types
+  - Species names as panel titles
+- **Note for Students**: Notice how different species use different combinations of patches, and how some patches (like UV) occur in specific wavelength regions.
