@@ -504,7 +504,7 @@ hawaiian_colors <- c(
 ```
 
 ## 5.2 Figure 5.2-1: Hawaiian Fish Mean Spectra
-```{r fig-5.2-1, fig.height=30, fig.width=20, out.width='100%'}
+```{r fig-5.2-1, fig.height=130, fig.width=20, out.width='100%'}
 # Calculate mean spectra per species and patch
 hawaiian_means <- hawaiian_data %>%
   group_by(Species, Patch, Wavelength) %>%
@@ -514,67 +514,31 @@ hawaiian_means <- hawaiian_data %>%
     .groups = "drop"
   )
 
-# Get unique species and calculate number of panels needed
-species_list <- unique(hawaiian_means$Species)
-n_species <- length(species_list)
-n_cols <- 2  # Two columns of panels
-n_rows <- ceiling(n_species/n_cols)
-
-# Create multi-panel plot with larger margins
-par(mfrow = c(n_rows, n_cols), 
-    mar = c(4, 4, 3, 2),  # Increased margins
-    oma = c(2, 2, 2, 1))  # Added outer margins
-
-for(species in species_list) {
-  species_data <- hawaiian_means %>%
-    dplyr::filter(Species == species)
-  
-  # Plot with larger title margins and increased text size
-  plot(NULL, xlim = c(400, 800), ylim = c(0, 100),
-       xlab = "", ylab = "",
-       main = gsub("_", " ", species),
-       cex.main = 1.2,  # Larger title
-       cex.axis = 1.1)  # Larger axis labels
-  
-  # Add grid
-  grid(nx = NULL, ny = NULL, col = "lightgray", lty = "dotted")
-  
-  # Plot each patch
-  for(patch in unique(species_data$Patch)) {
-    patch_data <- species_data %>%
-      dplyr::filter(Patch == patch)
-    
-    lines(patch_data$Wavelength, patch_data$Mean,
-          col = hawaiian_colors[patch],
-          lwd = 2.5)  # Thicker lines
-  }
-  
-  # Add legend if it's the first plot
-  if(species == species_list[1]) {
-    patches <- unique(species_data$Patch)
-    legend("topright", legend = patches,
-           col = hawaiian_colors[patches],
-           lwd = 2.5, cex = 1,  # Larger legend text
-           bg = "white", # White background
-           box.lwd = 0.5)
-  }
-  
-  # Add axis labels to bottom and left panels only
-  if(which(species_list == species) > n_species - n_cols) {
-    title(xlab = "Wavelength (nm)", line = 2.5, cex.lab = 1.2)
-  }
-  if(which(species_list == species) %% n_cols == 1) {
-    title(ylab = "Reflectance (%)", line = 2.5, cex.lab = 1.2)
-  }
-}
-
-# Add overall title
-mtext("Hawaiian Fish Spectral Signatures", 
-      outer = TRUE, line = 0.5, 
-      cex = 1.5, font = 2)
-
-# Reset par
-par(mfrow = c(1, 1))
+# Create the plot
+ggplot(hawaiian_means, aes(x = Wavelength, y = Mean, color = Patch, fill = Patch)) +
+  geom_ribbon(aes(ymin = Mean - SD, ymax = Mean + SD), alpha = 0.2, color = NA) +
+  geom_line(size = 1) +
+  scale_color_manual(values = hawaiian_colors) +
+  scale_fill_manual(values = hawaiian_colors) +
+  facet_wrap(~ Species, ncol = 2) +
+  labs(
+    title = "Hawaiian Fish Spectral Signatures",
+    x = "Wavelength (nm)",
+    y = "Reflectance (%)",
+    caption = "Mean reflectance per patch across individuals (n=3 per point). SD bands show within-species variation.\nUV patches shown in deep purple, complex patches (e.g., Blue/UV) shown in darker variants."
+  ) +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 10),
+    legend.text = element_text(size = 10),
+    plot.title = element_text(size = 16, hjust = 0.5),
+    plot.caption = element_text(size = 12),
+    legend.position = "top",
+    panel.grid.major = element_line(color = "gray90", linetype = "dotted"),
+    panel.grid.minor = element_line(color = "gray95", linetype = "dotted")
+  )
 ```
 
 **Breakdown**:
@@ -586,6 +550,7 @@ par(mfrow = c(1, 1))
   - UV patches shown in deep purple
   - Complex patches (e.g., Blue/UV) shown in darker variant of primary color
   - Grid lines aid in reading values
-  - Legend on first panel shows patch types
+  - Legend at top shows patch types
   - Species names as panel titles
+  - Standard deviation bands show variation
 - **Note for Students**: Notice how different species use different combinations of patches, and how some patches (like UV) occur in specific wavelength regions.
