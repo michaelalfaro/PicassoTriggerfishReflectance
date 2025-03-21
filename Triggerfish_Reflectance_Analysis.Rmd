@@ -1,9 +1,3 @@
-
-
-### Step 2: R Markdown Demo Script
-Below is an R Markdown script that analyzes the data and generates figures analogous to Kolmann et al. (2021), with explanations and equations.
-
-```Rmd
 ---
 title: "Picasso Triggerfish Reflectance Analysis Demo"
 author: "Grok (xAI)"
@@ -21,7 +15,14 @@ library(hyperSpec)  # For spectral angle (simplified ACE)
 ```
 
 ## Overview
-This demo analyzes simulated reflectance data for four color patches (White, Black, Orange, Blue) in Picasso triggerfish across 400-800 nm for five individuals with three repeated measures per patch. It replicates figures from Kolmann et al. (2021) and explains the use of Equations 1 and 2 for spectral angle analysis.
+This demo analyzes simulated reflectance data for four color patches (White, Black, Orange, Blue) in Picasso triggerfish (*Rhinecanthus aculeatus*) across 400-800 nm for five individuals with three repeated measures per patch. It replicates figures from Kolmann et al. (2021)—Figures 3, 5, 6, and 7—and explains the use of Equations 1 and 2 for spectral angle analysis. The data includes measurement error (SD = 2%), inter-individual variation (±10% amplitude, ±20 nm peak shift), and one faded individual (30% reduced reflectance) to test detection.
+
+## Data Simulation
+The reflectance data was simulated with biologically realistic curves:
+- **White**: Structural, high reflectance (~70-90%) with a broad peak at 500 nm.
+- **Black**: Pigmented, low reflectance (~10%) across all wavelengths.
+- **Orange**: Pigmented, peak at 620 nm (~90%).
+- **Blue**: Pigmented, peak at 470 nm (~85%).
 
 ## Load Data
 ```{r load-data}
@@ -31,9 +32,9 @@ n_ind <- length(unique(data$Individual))  # Define number of individuals
 head(data)
 ```
 
-## Figure 3: Comparative Spectral Signatures
-Plot mean reflectance for each patch across individuals, showing variation.
+The dataset includes columns: `Individual`, `Patch`, `Replicate`, `Wavelength`, and `Reflectance`.
 
+## Figure 3: Comparative Spectral Signatures
 ```{r fig3}
 fig3_data <- data %>%
   group_by(Patch, Wavelength) %>%
@@ -42,13 +43,15 @@ fig3_data <- data %>%
 ggplot(fig3_data, aes(x = Wavelength, y = Mean, color = Patch)) +
   geom_line() +
   geom_ribbon(aes(ymin = Mean - SD, ymax = Mean + SD), alpha = 0.2, linetype = 0) +
-  labs(title = "Comparative Spectral Signatures", x = "Wavelength (nm)", y = "Reflectance (%)") +
+  labs(title = "Figure 3: Comparative Spectral Signatures",
+       x = "Wavelength (nm)", y = "Reflectance (%)",
+       caption = "Mean reflectance per patch across all individuals and replicates. Within-patch variation (measurement error and individual differences) is captured by SD bands. Between-individual variation is averaged out.") +
   theme_minimal()
 ```
 
-## Figure 5: First Derivatives
-Calculate the first derivative of mean reflectance to highlight rate of change.
+**Legend**: This figure shows the mean reflectance profile for each patch, averaging across all individuals and their three replicates. Within-patch variation includes measurement error (SD = 2% per replicate) and between-individual differences (e.g., amplitude and peak shifts), visualized as standard deviation (SD) bands. Between-individual variation is collapsed into the mean, highlighting patch-specific spectral shapes.
 
+## Figure 5: First Derivatives
 ```{r fig5}
 fig5_data <- fig3_data %>%
   group_by(Patch) %>%
@@ -58,13 +61,15 @@ fig5_data <- fig3_data %>%
 
 ggplot(fig5_data, aes(x = Wavelength, y = Deriv, color = Patch)) +
   geom_line() +
-  labs(title = "First Derivative of Spectral Signatures", x = "Wavelength (nm)", y = "dR/dλ") +
+  labs(title = "Figure 5: First Derivative of Spectral Signatures",
+       x = "Wavelength (nm)", y = "dR/dλ",
+       caption = "First derivative of mean reflectance per patch. Within-patch variation is averaged, focusing on rate of change across wavelengths. Between-individual variation is not shown as it's collapsed into the mean.") +
   theme_minimal()
 ```
 
-## Figure 6: Intraspecific Variation
-Show individual variation for each patch, with mean in red.
+**Legend**: The first derivative of mean reflectance per patch highlights regions of rapid change. Within-patch variation (replicate error and individual differences) is averaged into the mean reflectance before differentiation, so this figure focuses on patch-specific trends rather than individual-level variation. Between-individual differences are not directly visible, as the derivative is computed from the aggregated mean.
 
+## Figure 6: Intraspecific Variation
 ```{r fig6}
 fig6_plots <- lapply(patches, function(p) {
   p_data <- subset(data, Patch == p)
@@ -72,38 +77,42 @@ fig6_plots <- lapply(patches, function(p) {
   
   ggplot() +
     geom_line(data = p_data, 
-              aes(x = Wavelength, y = Reflectance, group = factor(paste(Individual, Replicate))),
+              aes(x = Wavelength, y = Reflectance, group = interaction(Individual, Replicate)),
               alpha = 0.3) +
     geom_line(data = mean_data,
               aes(x = Wavelength, y = Reflectance),
               color = "red", size = 1) +
-    labs(title = p, x = "Wavelength (nm)", y = "Reflectance (%)") +
+    labs(title = paste("Patch:", p),
+         x = "Wavelength (nm)", y = "Reflectance (%)",
+         caption = "All replicates (thin lines) show within-individual variation (measurement error, SD = 2%) and between-individual variation (e.g., amplitude, peak shifts). Red line is the patch mean across all individuals.") +
     theme_minimal()
 })
 
 grid.arrange(grobs = fig6_plots, ncol = 2)
 ```
 
+**Legend**: Each panel displays reflectance curves for a single patch across all individuals and replicates (thin lines), with the mean in red. Within-individual variation is the spread among the three replicates per individual (measurement error, SD = 2%). Between-individual variation is evident in differences in amplitude and peak positions across individuals (e.g., one faded individual has lower reflectance). Within-patch variation combines both, captured by the spread of all lines, while the red mean averages across individuals to show the typical patch profile.
+
 ## Figure 7: Adaptive Coherence Estimator (ACE)
-Implement a simplified ACE to match spectra, using spectral angle (Equations 1 and 2).
-
 ### Equations
-Kolmann et al. (2021) use ACE to match spectral signatures, with spectral angle (α) as a key metric:
+Kolmann et al. (2021) use ACE for spectral matching, with two key equations:
 
-- **Equation 1**: Spectral Angle (α)
+- **Equation 1: Spectral Angle (α)**  
+  Measures similarity between test spectrum \(\mathbf{x}\) (individual mean) and target spectrum \(\mathbf{S}\) (patch mean):
   \[
   \alpha = \cos^{-1} \left( \frac{\mathbf{x} \cdot \mathbf{S}}{\|\mathbf{x}\| \|\mathbf{S}\|} \right)
   \]
-  Where \(\mathbf{x}\) is the test spectrum, \(\mathbf{S}\) is the target spectrum, \(\cdot\) is the dot product, and \(\|\cdot\|\) is the Euclidean norm.
+  Where \(\mathbf{x} \cdot \mathbf{S}\) is the dot product, and \(\|\mathbf{x}\|\) and \(\|\mathbf{S}\|\) are Euclidean norms. Lower angles indicate greater similarity.
 
-- **Equation 2**: ACE Detection Statistic
+- **Equation 2: ACE Detection Statistic**  
+  Incorporates background covariance \(\Sigma_b\):
   \[
   D_{ACE} = \frac{(\mathbf{S}^T \Sigma_b^{-1} \mathbf{x})^2}{(\mathbf{S}^T \Sigma_b^{-1} \mathbf{S})(\mathbf{x}^T \Sigma_b^{-1} \mathbf{x})}
   \]
-  Where \(\Sigma_b\) is the background covariance matrix, approximated here by all other spectra.
+  Values closer to 1 indicate a match, accounting for background variability.
 
 ### Analysis
-Calculate spectral angles between each individual's mean spectrum and the overall mean per patch.
+We calculate spectral angles between each individual's mean spectrum and the overall mean per patch, simplifying ACE by omitting \(\Sigma_b\).
 
 ```{r fig7}
 mean_spectra <- data %>%
@@ -116,11 +125,10 @@ patch_means <- data %>%
   summarise(Mean = mean(Reflectance), .groups = "drop") %>%
   pivot_wider(names_from = Wavelength, values_from = Mean)
 
-# Simplified spectral angle calculation
 spectral_angle <- function(x, s) {
-  dot <- sum(x * s)
-  norm_x <- sqrt(sum(x^2))
-  norm_s <- sqrt(sum(s^2))
+  dot <- sum(x * s, na.rm = TRUE)
+  norm_x <- sqrt(sum(x^2, na.rm = TRUE))
+  norm_s <- sqrt(sum(s^2, na.rm = TRUE))
   acos(dot / (norm_x * norm_s)) * 180 / pi  # Degrees
 }
 
@@ -141,28 +149,21 @@ for (i in 1:nrow(ace_data)) {
 ggplot(ace_data, aes(x = Patch, y = Individual, fill = Angle)) +
   geom_tile() +
   scale_fill_gradient(low = "blue", high = "red", name = "Spectral Angle (°)") +
-  labs(title = "ACE Spectral Matching", x = "Target Patch", y = "Test Individual") +
+  labs(title = "Figure 7: ACE Spectral Matching",
+       x = "Target Patch", y = "Test Individual",
+       caption = "Spectral angles between individual means and patch means. Within-individual variation is averaged per individual. Between-individual variation drives angle differences (e.g., faded individual has higher angles).") +
   theme_minimal()
 ```
 
+### Detailed ACE Explanation
+- **How ACE Uses Spectral Angle**: In Kolmann et al. (2021), ACE matches a test spectrum (\(\mathbf{x}\)) to a known target (\(\mathbf{S}\)) by considering both similarity (via spectral angle, Eq. 1) and background variability (via \(\Sigma_b\), Eq. 2). The spectral angle measures the cosine similarity between vectors, ignoring amplitude differences and focusing on shape. Equation 2 adjusts this by weighting against background covariance, enhancing detection in noisy data.
+- **Simplifications**: Here, we use only Equation 1 (spectral angle) due to the small dataset (5 individuals, 4 patches). Calculating \(\Sigma_b\) (background covariance) requires a larger sample to be meaningful, so we omit Equation 2's full ACE statistic. This simplification assumes the patch mean (\(\mathbf{S}\)) is the target, and individual deviations (e.g., fading) increase the angle. For real data with more samples, \(\Sigma_b\) would be computed from all non-target spectra to improve specificity.
+- **Does ACE Work Here?**: Yes, but with caveats. With only 5 individuals and 20 spectra (5 × 4 patches), the dataset is small for full ACE (which thrives on larger, noisier datasets). The spectral angle alone effectively highlights variation (e.g., the faded individual), but lacks the robustness of \(\Sigma_b\)-adjusted ACE. For your real data, with potentially more individuals, full ACE would be feasible and more powerful.
+
 ## Interpretation
-- **Figure 3**: Shows patch-specific reflectance profiles.
-- **Figure 5**: Highlights wavelength regions of rapid change.
-- **Figure 6**: Reveals individual variation; look for a faded individual with lower amplitude.
-- **Figure 7**: Uses spectral angle (Eq. 1) to match spectra; higher angles indicate divergence. Equation 2 is approximated here but typically requires background covariance.
+- **Figure 3**: Patch-specific profiles average out within- and between-individual variation, with SD showing combined spread.
+- **Figure 5**: Derivatives focus on mean patch trends, masking individual variation.
+- **Figure 6**: Explicitly shows within-individual (replicate spread) and between-individual (curve differences) variation, with the mean as a reference.
+- **Figure 7**: Spectral angles capture between-individual variation relative to patch means, with within-individual variation averaged out. The faded individual should have higher angles.
 
-This template guides your real data analysis, focusing on spectral differences and matching.
-```
-
-### Step 3: Downloadable Files
-- **CSV**: [Picasso_Triggerfish_Reflectance.csv](attachment://Picasso_Triggerfish_Reflectance.csv)
-- **R Markdown**: [Triggerfish_Reflectance_Analysis.Rmd](attachment://Triggerfish_Reflectance_Analysis.Rmd)
-
-(Note: Since I can't attach files directly, you can copy the code above into a `.csv` and `.Rmd` file, respectively, and run them locally.)
-
-### Notes
-- **Equations 1 and 2**: Equation 1 (spectral angle) measures similarity between spectra, used in Figure 7. Equation 2 (ACE statistic) incorporates background covariance, simplified here due to simulation constraints but explained for real data use.
-- **Faded Individual**: One individual's reflectance is reduced by 30%; you can detect it via lower amplitude in Figure 6 or higher spectral angles in Figure 7.
-- **Dependencies**: Install `tidyverse`, `signal`, `hyperSpec`, and `gridExtra` to run the script.
-
-Let me know if you need adjustments or help running it!
+This template is ready for your real data—replace the CSV and adjust as needed.
