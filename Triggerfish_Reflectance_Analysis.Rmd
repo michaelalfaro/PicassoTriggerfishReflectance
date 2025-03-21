@@ -13,6 +13,7 @@ library(gridExtra)
 library(signal)  # For derivatives
 library(hyperSpec)  # For spectral angle
 library(stats)  # For PCA and statistical tests
+library(ggtext)  # For markdown text in plots
 
 # Define consistent colors for patches
 patch_colors <- c(
@@ -579,7 +580,7 @@ claude_colors <- c(
 ```{r fig-6.2-1, fig.height=130, fig.width=20, out.width='100%'}
 # Calculate mean spectra per species and patch
 claude_means <- claude_data %>%
-  group_by(Species, Patch, Wavelength) %>%
+  group_by(Family, Species, Patch, Wavelength) %>%
   summarise(
     Mean = mean(Reflectance),
     SD = sd(Reflectance),
@@ -592,16 +593,16 @@ ggplot(claude_means, aes(x = Wavelength, y = Mean, color = Patch, fill = Patch))
   geom_line(size = 1) +
   scale_color_manual(values = claude_colors) +
   scale_fill_manual(values = claude_colors) +
-  facet_wrap(~ Species, ncol = 2) +
+  facet_wrap(~ paste0("**", Family, "**\n", Species), ncol = 2, labeller = label_wrap_gen()) +
   labs(
-    title = "Claude's Simulated Fish Spectral Signatures",
+    title = "Simulated Fish Spectral Signatures",
     x = "Wavelength (nm)",
     y = "Reflectance (%)",
-    caption = "Mean reflectance per patch across individuals (n=3 per point). SD bands show within-species variation.\nUV patches shown in deep purple."
+    caption = "Mean reflectance per patch across individuals (n=3 per point). SD bands show within-species variation."
   ) +
   theme_minimal() +
   theme(
-    strip.text = element_text(size = 12, face = "bold"),
+    strip.text = element_markdown(size = 12),
     axis.title = element_text(size = 14),
     axis.text = element_text(size = 10),
     legend.text = element_text(size = 10),
@@ -617,7 +618,7 @@ ggplot(claude_means, aes(x = Wavelength, y = Mean, color = Patch, fill = Patch))
 ```{r fig-6.3-1}
 # Calculate spectral diversity metrics
 spectral_diversity <- claude_data %>%
-  group_by(Species) %>%
+  group_by(Family, Species) %>%
   summarise(
     Mean_Reflectance = mean(Reflectance),
     SD_Reflectance = sd(Reflectance),
@@ -637,6 +638,7 @@ ggplot(spectral_diversity, aes(x = reorder(Species, Mean_Reflectance))) +
   geom_point(aes(y = Min_Reflectance, color = "Min"), size = 2) +
   scale_color_manual(values = c("Mean" = "blue", "SD" = "gray", 
                                "Max" = "red", "Min" = "green")) +
+  facet_wrap(~ paste0("**", Family, "**"), scales = "free_x", ncol = 2) +
   labs(
     title = "Spectral Diversity Across Species",
     x = "Species",
@@ -645,7 +647,8 @@ ggplot(spectral_diversity, aes(x = reorder(Species, Mean_Reflectance))) +
   ) +
   theme_minimal() +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.text = element_markdown(size = 12),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
     legend.position = "top"
   )
 ```
@@ -654,7 +657,7 @@ ggplot(spectral_diversity, aes(x = reorder(Species, Mean_Reflectance))) +
 ```{r fig-6.4-1}
 # Calculate patch distribution
 patch_distribution <- claude_data %>%
-  group_by(Species, Patch) %>%
+  group_by(Family, Species, Patch) %>%
   summarise(
     Mean_Reflectance = mean(Reflectance),
     .groups = "drop"
@@ -664,6 +667,7 @@ patch_distribution <- claude_data %>%
 ggplot(patch_distribution, aes(x = Patch, y = Species, fill = Mean_Reflectance)) +
   geom_tile() +
   scale_fill_gradient(low = "white", high = "blue") +
+  facet_wrap(~ paste0("**", Family, "**"), scales = "free_y", ncol = 2) +
   labs(
     title = "Patch Reflectance Distribution",
     x = "Patch Type",
@@ -672,20 +676,22 @@ ggplot(patch_distribution, aes(x = Patch, y = Species, fill = Mean_Reflectance))
   ) +
   theme_minimal() +
   theme(
+    strip.text = element_markdown(size = 12),
     axis.text.x = element_text(angle = 45, hjust = 1),
     axis.text.y = element_text(size = 8)
   )
 ```
 
-**Breakdown of Claude's Simulation Analysis**:
-- **Data Structure**: The simulation generated data for 51 species with 3 individuals each, covering 10 different patch types across wavelengths from 400 to 800 nm.
+**Breakdown of Simulated Fish Analysis**:
+- **Data Structure**: The simulation generated data for real fish species with 3 individuals each, using actual color patches from the literature.
 - **Visualization Approach**: 
-  - Figure 6.2-1 shows detailed spectral signatures for each species and patch type
-  - Figure 6.3-1 provides an overview of spectral diversity across species
-  - Figure 6.4-1 offers a heatmap view of patch distribution
+  - Figure 6.2-1 shows detailed spectral signatures for each species and patch type, organized by family
+  - Figure 6.3-1 provides an overview of spectral diversity across species within families
+  - Figure 6.4-1 offers a heatmap view of patch distribution by family
 - **Key Features**:
-  - Consistent color scheme with the Hawaiian fish analysis
+  - Family names in bold above species names
+  - Real species names instead of generic identifiers
+  - Consistent color scheme across all plots
   - Standard deviation bands to show variation
-  - Faceted layout for easy species comparison
   - Multiple visualization approaches for different aspects of the data
 - **Note for Students**: Compare these simulated spectra with the real Hawaiian fish data to understand how well the simulation captures natural variation in fish coloration.

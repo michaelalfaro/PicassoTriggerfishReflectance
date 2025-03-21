@@ -1,205 +1,190 @@
-# Fish Reflectance Spectra Simulation
-# This script generates simulated reflectance spectra for 51 fish species
-# with 3 individuals per species and varying color patches
+# Simulate reflectance data for multiple fish species
+# This script generates realistic spectral reflectance data for various fish species
+# with different color patches and natural variation
 
-# Set seed for reproducibility
+# Load required packages
+library(tidyverse)
+
+# Set random seed for reproducibility
 set.seed(42)
 
-# Define the parameters
-num_species <- 51
-individuals_per_species <- 3
-wavelength_range <- seq(400, 800, by = 4) # 400-800nm in 4nm steps
-
-# Create a list of species names
-species_names <- c(
-  "Acanthurus blochii", "Acanthurus dussumieri", "Acanthurus nigrofuscus", 
-  "Acanthurus olivaceus", "Acanthurus thompsoni", "Acanthurus triostegus",
-  "Chaetodon auriga", "Chaetodon lunula", "Chaetodon multicinctus",
-  "Chaetodon ornatissimus", "Chaetodon quadrimaculatus", "Chaetodon reticulatus",
-  "Chaetodon trifascialis", "Ctenochaetus strigosus", "Forcipiger flavissimus",
-  "Gomphosus varius", "Halichoeres ornatissimus", "Labroides phthirophagus",
-  "Macropharyngodon geoffroy", "Melichthys niger", "Melichthys vidua",
-  "Monotaxis grandoculis", "Mulloidichthys flavolineatus", "Mulloidichthys vanicolensis",
-  "Naso hexacanthus", "Naso lituratus", "Paracirrhites arcatus",
-  "Paracirrhites forsteri", "Parupeneus multifasciatus", "Parupeneus pleurostigma",
-  "Pseudocheilinus tetrataenia", "Rhinecanthus rectangulus", "Scarus psittacus",
-  "Scarus rubroviolaceus", "Stethojulis balteata", "Sufflamen bursa",
-  "Thalassoma ballieui", "Thalassoma duperrey", "Thalassoma trilobatum",
-  "Zebrasoma flavescens", "Zebrasoma veliferum", "Chromis hanui",
-  "Chromis ovalis", "Chromis vanderbilti", "Chromis verater",
-  "Abudefduf abdominalis", "Abudefduf sordidus", "Centropyge potteri",
-  "Dascyllus albisella", "Plectroglyphidodon johnstonianus", "Zanclus cornutus"
+# Define species data with family and color patches
+species_data <- list(
+  "Acanthuridae" = list(
+    "Acanthurus blochii" = c("Blue", "Yellow"),
+    "Acanthurus dussumieri" = c("Blue", "Yellow"),
+    "Acanthurus nigrofuscus" = c("Brown/Olive", "Blue"),
+    "Acanthurus olivaceus" = c("Blue", "Yellow", "White"),
+    "Acanthurus thompsoni" = c("Blue", "Black"),
+    "Acanthurus triostegus" = c("White", "Black"),
+    "Ctenochaetus strigosus" = c("Brown/Olive", "Blue"),
+    "Naso hexacanthus" = c("Blue", "White"),
+    "Naso lituratus" = c("Blue", "Yellow", "Black"),
+    "Zebrasoma flavescens" = c("Yellow"),
+    "Zebrasoma veliferum" = c("Yellow", "Black", "White")
+  ),
+  "Chaetodontidae" = list(
+    "Chaetodon auriga" = c("White", "Yellow", "Black"),
+    "Chaetodon lunula" = c("Yellow", "White", "Black"),
+    "Chaetodon multicinctus" = c("White", "Black", "Yellow"),
+    "Chaetodon ornatissimus" = c("White", "Orange", "Black"),
+    "Chaetodon quadrimaculatus" = c("Yellow", "Black", "White"),
+    "Chaetodon reticulatus" = c("White", "Black", "Yellow"),
+    "Chaetodon trifascialis" = c("White", "Black"),
+    "Forcipiger flavissimus" = c("Yellow", "Black")
+  ),
+  "Labridae" = list(
+    "Gomphosus varius" = c("Green", "Blue"),
+    "Halichoeres ornatissimus" = c("Green", "Blue", "Orange"),
+    "Labroides phthirophagus" = c("Blue", "Black"),
+    "Macropharyngodon geoffroy" = c("Green", "Blue", "Orange"),
+    "Thalassoma ballieui" = c("Green", "Blue", "Red"),
+    "Thalassoma duperrey" = c("Green", "Blue", "Red"),
+    "Thalassoma trilobatum" = c("Green", "Blue", "Red")
+  ),
+  "Balistidae" = list(
+    "Melichthys niger" = c("Black", "Blue"),
+    "Melichthys vidua" = c("Blue", "White"),
+    "Rhinecanthus rectangulus" = c("White", "Black", "Yellow"),
+    "Sufflamen bursa" = c("Yellow", "Black", "White")
+  ),
+  "Mullidae" = list(
+    "Mulloidichthys flavolineatus" = c("Yellow", "White"),
+    "Mulloidichthys vanicolensis" = c("Red", "Yellow", "White"),
+    "Parupeneus multifasciatus" = c("Yellow", "Red", "White", "Violet"),
+    "Parupeneus pleurostigma" = c("White", "Red", "Black")
+  ),
+  "Cirrhitidae" = list(
+    "Paracirrhites arcatus" = c("Red", "White"),
+    "Paracirrhites forsteri" = c("Red", "White")
+  ),
+  "Scaridae" = list(
+    "Scarus psittacus" = c("Green", "Blue"),
+    "Scarus rubroviolaceus" = c("Green", "Blue", "Red")
+  ),
+  "Pomacentridae" = list(
+    "Chromis hanui" = c("Brown/Olive", "Blue"),
+    "Chromis ovalis" = c("Brown/Olive", "Blue"),
+    "Chromis vanderbilti" = c("Blue", "Yellow"),
+    "Chromis verater" = c("Blue", "Brown/Olive"),
+    "Abudefduf abdominalis" = c("White", "Black", "Yellow"),
+    "Abudefduf sordidus" = c("White", "Black"),
+    "Dascyllus albisella" = c("Black", "White"),
+    "Plectroglyphidodon johnstonianus" = c("White", "Black", "Yellow")
+  ),
+  "Zanclidae" = list(
+    "Zanclus cornutus" = c("White", "Black", "Yellow")
+  ),
+  "Lethrinidae" = list(
+    "Monotaxis grandoculis" = c("White", "Yellow")
+  ),
+  "Pomacanthidae" = list(
+    "Centropyge potteri" = c("Orange", "Blue")
+  )
 )
 
-# Define common color patches for reef fish
-color_patches <- c("Blue", "Yellow", "Green", "Red", "Black", "White", "Orange", "Purple", "Brown", "Pink")
+# Extract all species and calculate total number
+all_species <- unlist(lapply(species_data, names))
+n_species <- length(all_species)
+n_ind <- 3  # Number of individuals per species
+wavelengths <- seq(400, 800, by = 5)  # Wavelength range in nm
+n_wavelengths <- length(wavelengths)
 
-# Function to create base reflectance curves for different colors
-create_base_curve <- function(color, wavelength) {
-  # Different reflectance patterns based on color
-  # Each color has its characteristic spectral signature
+# Define color patches and their spectral characteristics
+patches <- list(
+  "UV" = list(peak = 350, width = 30, height = 0.8),
+  "Violet" = list(peak = 420, width = 40, height = 0.85),
+  "Blue" = list(peak = 470, width = 50, height = 0.9),
+  "Green" = list(peak = 550, width = 60, height = 0.85),
+  "Yellow" = list(peak = 580, width = 45, height = 0.9),
+  "Orange" = list(peak = 620, width = 40, height = 0.85),
+  "Red" = list(peak = 650, width = 35, height = 0.8),
+  "Brown/Olive" = list(peak = 600, width = 70, height = 0.7),
+  "Black" = list(peak = 500, width = 200, height = 0.2),
+  "White" = list(peak = 500, width = 200, height = 0.9)
+)
+
+# Create empty CSV file with headers
+write.csv(data.frame(
+  Family = character(),
+  Species = character(),
+  Individual = integer(),
+  Patch = character(),
+  Wavelength = numeric(),
+  Reflectance = numeric(),
+  stringsAsFactors = FALSE
+), "Simulated_Fish_Reflectance.csv", row.names = FALSE)
+
+# Function to generate reflectance spectrum for a patch
+generate_spectrum <- function(wavelengths, peak, width, height, noise = 0.02) {
+  # Generate Gaussian curve
+  spectrum <- height * exp(-(wavelengths - peak)^2 / (2 * width^2))
   
-  reflectance <- numeric(length(wavelength))
+  # Add noise
+  spectrum <- spectrum * (1 + rnorm(length(wavelengths), 0, noise))
   
-  if (color == "Blue") {
-    # Blue: high reflectance in 450-490nm, lower elsewhere
-    reflectance <- 10 + 90 * exp(-0.5 * ((wavelength - 470) / 50)^2)
-  } 
-  else if (color == "Yellow") {
-    # Yellow: high reflectance above 520nm, low below
-    reflectance <- 10 + 90 / (1 + exp(-0.1 * (wavelength - 520)))
-  } 
-  else if (color == "Green") {
-    # Green: peak around 520-550nm
-    reflectance <- 10 + 90 * exp(-0.5 * ((wavelength - 530) / 60)^2)
-  } 
-  else if (color == "Red") {
-    # Red: high reflectance above 600nm
-    reflectance <- 10 + 90 / (1 + exp(-0.1 * (wavelength - 600)))
-  } 
-  else if (color == "Black") {
-    # Black: low reflectance across spectrum
-    reflectance <- 5 + 10 * sin(wavelength/100)
-  } 
-  else if (color == "White") {
-    # White: high reflectance across spectrum
-    reflectance <- 90 + 10 * sin(wavelength/200)
-  } 
-  else if (color == "Orange") {
-    # Orange: between red and yellow
-    reflectance <- 10 + 90 / (1 + exp(-0.1 * (wavelength - 580)))
-  } 
-  else if (color == "Purple") {
-    # Purple: peaks at both blue and red ends
-    blue_component <- 40 * exp(-0.5 * ((wavelength - 450) / 40)^2)
-    red_component <- 30 / (1 + exp(-0.1 * (wavelength - 650)))
-    reflectance <- 10 + blue_component + red_component
-  } 
-  else if (color == "Brown") {
-    # Brown: gradual increase above 550nm, but not as high as red/yellow
-    reflectance <- 20 + 40 / (1 + exp(-0.05 * (wavelength - 600)))
-  } 
-  else if (color == "Pink") {
-    # Pink: like red but with some blue component
-    blue_component <- 30 * exp(-0.5 * ((wavelength - 450) / 60)^2)
-    red_component <- 60 / (1 + exp(-0.1 * (wavelength - 600)))
-    reflectance <- 20 + blue_component + red_component
-  } 
-  else {
-    # Default curve if color not recognized
-    reflectance <- 50 * rep(1, length(wavelength))
-  }
+  # Ensure values are between 0 and 1
+  spectrum <- pmax(0, pmin(1, spectrum))
   
-  # Ensure all values are within 0-100 range
-  reflectance <- pmax(0, pmin(100, reflectance))
-  
-  return(reflectance)
+  return(spectrum)
 }
 
-# Function to add species-specific variations to base curves
-modify_curve_for_species <- function(base_curve, species_index) {
-  # Add species-specific modifications to make curves unique per species
-  # Using the species index to create consistent but varied patterns
+# Process species in batches for memory efficiency
+batch_size <- 5
+for (family in names(species_data)) {
+  family_species <- species_data[[family]]
   
-  # Scale factor varies by species (0.8 to 1.2)
-  scale_factor <- 0.8 + (species_index / num_species) * 0.4
-  
-  # Shift factor varies by species (-50 to +50 nm)
-  shift <- -50 + (species_index / num_species) * (100)
-  
-  # Apply modifications
-  n <- length(base_curve)
-  shifted_indices <- round(seq(1, n, length.out = n) + (shift/4))
-  shifted_indices <- pmin(pmax(1, shifted_indices), n)
-  
-  # Create shifted and scaled curve
-  modified_curve <- base_curve[shifted_indices] * scale_factor
-  
-  # Ensure all values are within 0-100 range
-  modified_curve <- pmax(0, pmin(100, modified_curve))
-  
-  return(modified_curve)
-}
-
-# Function to add individual variation within species
-add_individual_variation <- function(species_curve, individual_index) {
-  # Add noise to simulate individual variation within a species
-  
-  # Noise amplitude varies by individual (1-5%)
-  noise_amplitude <- 1 + individual_index * 2
-  
-  # Generate noise
-  noise <- rnorm(length(species_curve), mean = 0, sd = noise_amplitude)
-  
-  # Add noise to curve
-  varied_curve <- species_curve + noise
-  
-  # Ensure all values are within 0-100 range
-  varied_curve <- pmax(0, pmin(100, varied_curve))
-  
-  return(varied_curve)
-}
-
-# Assign colors to species (2-4 colors per species)
-set.seed(42) # Reset seed for reproducibility
-species_colors <- list()
-for (i in 1:num_species) {
-  # Each species has 2-4 color patches
-  num_colors <- sample(2:4, 1)
-  species_colors[[i]] <- sample(color_patches, num_colors)
-}
-
-# Create data frame to store all the data
-reflectance_data <- data.frame()
-
-# Generate data for each species
-for (s in 1:num_species) {
-  species_name <- species_names[s]
-  colors <- species_colors[[s]]
-  
-  for (c in colors) {
-    # Get base reflectance curve for this color
-    base_curve <- create_base_curve(c, wavelength_range)
+  for (species in names(family_species)) {
+    # Get color patches for this species
+    species_patches <- family_species[[species]]
     
-    # Modify curve for this specific species
-    species_curve <- modify_curve_for_species(base_curve, s)
-    
-    # Generate data for each individual
-    for (i in 1:individuals_per_species) {
-      # Add individual variation
-      individual_curve <- add_individual_variation(species_curve, i)
+    # Generate data for each individual and patch
+    for (ind in 1:n_ind) {
+      # Add random brightness variation per individual (±10%)
+      brightness_factor <- 1 + rnorm(1, 0, 0.1)
       
-      # Add to data frame
-      individual_name <- paste0("Ind", i)
-      
-      for (w in 1:length(wavelength_range)) {
-        reflectance_data <- rbind(reflectance_data, data.frame(
-          Species = species_name,
-          Individual = individual_name,
-          Patch = c,
-          Wavelength = wavelength_range[w],
-          Reflectance = individual_curve[w]
-        ))
+      for (patch in species_patches) {
+        # Get patch parameters
+        params <- patches[[patch]]
+        
+        # Add random wavelength shift (±20 nm)
+        shifted_peak <- params$peak + rnorm(1, 0, 20)
+        
+        # Generate spectrum
+        reflectance <- generate_spectrum(
+          wavelengths = wavelengths,
+          peak = shifted_peak,
+          width = params$width,
+          height = params$height * brightness_factor
+        )
+        
+        # Add to batch data
+        batch_data <- data.frame(
+          Family = family,
+          Species = species,
+          Individual = ind,
+          Patch = patch,
+          Wavelength = wavelengths,
+          Reflectance = reflectance * 100  # Convert to percentage
+        )
+        
+        # Append to CSV file
+        write.table(batch_data, "Simulated_Fish_Reflectance.csv", 
+                   append = TRUE, sep = ",", row.names = FALSE, col.names = FALSE)
       }
     }
   }
-  
-  # Print progress
-  if (s %% 10 == 0) {
-    cat("Processed", s, "of", num_species, "species\n")
-  }
 }
 
-# Write to CSV
-write.csv(reflectance_data, "Simulated_Fish_Reflectance.csv", row.names = FALSE)
-
+# Print summary
 cat("Simulation complete. Data saved to 'Simulated_Fish_Reflectance.csv'\n")
-cat("Generated data for", num_species, "species with", individuals_per_species, "individuals each\n")
-cat("Total records:", nrow(reflectance_data), "\n")
+cat(sprintf("Generated data for %d species with %d individuals each\n", n_species, n_ind))
 
-# Print a summary of the data structure
+# Print data summary
+data <- read.csv("Simulated_Fish_Reflectance.csv")
 cat("\nData Summary:\n")
-cat("Number of species:", length(unique(reflectance_data$Species)), "\n")
-cat("Number of color patches:", length(unique(reflectance_data$Patch)), "\n")
-cat("Wavelength range:", min(reflectance_data$Wavelength), "to", max(reflectance_data$Wavelength), "nm\n")
-cat("Reflectance range:", min(reflectance_data$Reflectance), "to", max(reflectance_data$Reflectance), "\n")
+cat(sprintf("Number of families: %d\n", length(unique(data$Family))))
+cat(sprintf("Number of species: %d\n", length(unique(data$Species))))
+cat(sprintf("Number of color patches: %d\n", length(unique(data$Patch))))
+cat(sprintf("Wavelength range: %d to %d nm\n", min(data$Wavelength), max(data$Wavelength)))
+cat(sprintf("Reflectance range: %.1f to %.1f\n", min(data$Reflectance), max(data$Reflectance)))
