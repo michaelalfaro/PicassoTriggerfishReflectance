@@ -466,3 +466,12 @@ ggplot(var_angle_data, aes(x = Patch, y = Individual, fill = Angle)) +
   - 3.3-1: Dots in clusters.
   - 3.4-x: Curves with diagnostic dots, heatmaps.
 - **Key Takeaway**: We're hunting patch "fingerprints" within fish. Big differences (angles, distances, clusters) and low p-values = distinguishable. Small differences = too alike. Each method offers a lens—spectral angle for shape, distance for total difference, PCA for patterns, diagnostic bands for key clues.
+
+# 2.0 Data Simulation ----
+# First, simulate Picasso triggerfish data
+source("simulate_picasso_data.R")
+
+# Next, simulate Hawaiian fish data
+source("simulate_hawaiian_fish.R")
+# This creates a dataset with reflectance measurements for 51 Hawaiian reef fish species
+# The data is saved to "Hawaiian_Reef_Fish_Reflectance.csv"
