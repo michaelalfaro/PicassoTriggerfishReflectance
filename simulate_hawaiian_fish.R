@@ -1,9 +1,11 @@
 set.seed(123)
 library(tidyverse)  # For data manipulation
+library(pavo)       # For color validation
 
-wavelengths <- seq(400, 800, by = 4)  # 101 bands, ULTRIS-like
+# Wavelength range: 350-800 nm, 4 nm steps (113 bands)
+wavelengths <- seq(350, 800, by = 4)
 
-# Species and colors from Table 1 (unchanged)
+# Species and colors (unchanged)
 species_colors <- list(
   "Acanthurus blochii" = c("Blue", "Yellow"),
   "Acanthurus dussumieri" = c("Yellow", "Blue"),
@@ -58,73 +60,60 @@ species_colors <- list(
   "Zebrasoma flavescens" = c("Yellow")
 )
 
-# Color definitions (unchanged from last revision)
+# Color definitions with Gaussian peaks
 colors <- list(
-  "UV" = list(type = "peak", peak = 360, sigma = 30, amp = 50),
-  "Violet" = list(type = "peak", peak = 425, sigma = 35, amp = 65),
-  "Blue" = list(type = "peak", peak = 470, sigma = 35, amp = 80),
-  "Green" = list(type = "peak", peak = 525, sigma = 40, amp = 70),
-  "Yellow" = list(type = "step", R50 = 515, k = 0.15, amp = 85),
-  "Orange" = list(type = "step", R50 = 575, k = 0.15, amp = 85),
-  "Red" = list(type = "step", R50 = 650, k = 0.15, amp = 75),
-  "Brown/Olive" = list(type = "step", R50 = 550, k = 0.1, amp = 55),
-  "Black" = list(type = "flat", amp = 15),
-  "White" = list(type = "flat", amp = 85),
-  "Blue/UV" = list(type = "complex", peaks = c(470, 360), sigmas = c(35, 30), amps = c(80, 50)),
-  "Yellow/UV" = list(type = "complex", R50 = 515, k = 0.15, amp = 85, uv_peak = 360, uv_amp = 50),
-  "Orange-UV" = list(type = "complex", R50 = 575, k = 0.15, amp = 85, uv_peak = 360, uv_amp = 50),
-  "Red/UV" = list(type = "complex", R50 = 650, k = 0.15, amp = 75, uv_peak = 360, uv_amp = 50),
-  "Blue/red" = list(type = "complex", peaks = c(470, 650), sigmas = c(35, 40), amps = c(80, 60)),
-  "Labriform-green" = list(type = "complex", peaks = c(525, 450), sigmas = c(40, 35), amps = c(70, 55)),
-  "Labriform-purple" = list(type = "complex", peaks = c(425, 600), sigmas = c(35, 40), amps = c(65, 60))
+  "UV" = list(peak = 360, sigma = 40, amp = 50, base = 10),
+  "Violet" = list(peak = 400, sigma = 50, amp = 65, base = 15),  # Figure 2B: 400 nm
+  "Blue" = list(peak = 470, sigma = 50, amp = 80, base = 15),    # Figure 2B: ~450-505 nm
+  "Green" = list(peak = 525, sigma = 60, amp = 70, base = 20),   # Figure 2B: 505 nm
+  "Yellow" = list(peak = 575, sigma = 60, amp = 85, base = 15),  # Approx. from Yellow step R50
+  "Orange" = list(peak = 620, sigma = 60, amp = 85, base = 15),  # Approx. from Orange step R50
+  "Red" = list(peak = 675, sigma = 60, amp = 75, base = 15),     # Approx. from Red step R50
+  "Brown/Olive" = list(peak = 600, sigma = 60, amp = 55, base = 20),  # Approx. from Brown step
+  "Black" = list(peak = NA, sigma = NA, amp = 15, base = 15),    # Flat
+  "White" = list(peak = NA, sigma = NA, amp = 85, base = 85),    # Flat
+  "Blue/UV" = list(peaks = c(470, 360), sigmas = c(50, 40), amps = c(80, 50), base = 15),
+  "Yellow/UV" = list(peaks = c(575, 360), sigmas = c(60, 40), amps = c(85, 50), base = 15),
+  "Orange-UV" = list(peaks = c(620, 360), sigmas = c(60, 40), amps = c(85, 50), base = 15),
+  "Red/UV" = list(peaks = c(675, 360), sigmas = c(60, 40), amps = c(75, 50), base = 15),
+  "Blue/red" = list(peaks = c(470, 675), sigmas = c(50, 60), amps = c(80, 60), base = 15),
+  "Labriform-green" = list(peaks = c(525, 450), sigmas = c(60, 50), amps = c(70, 55), base = 20),
+  "Labriform-purple" = list(peaks = c(400, 650), sigmas = c(50, 60), amps = c(65, 60), base = 15)
 )
 
-# Curve generation functions
-peak_curve <- function(wl, peak, sigma, amp) amp * exp(-((wl - peak)^2) / (2 * sigma^2))
-step_curve <- function(wl, R50, k, amp) amp / (1 + exp(-k * (wl - R50)))
-flat_curve <- function(wl, amp) rep(amp, length(wl))
-
-# Reduced smoothing (5 nm FWHM)
-smooth_curve <- function(curve, wl, fwhm = 5) {
-  sigma <- fwhm / 2.355
-  weights <- dnorm(wl, mean = wl, sd = sigma)
-  conv <- convolve(curve, rev(weights), type = "open")
-  conv[(length(wl)+1):(2*length(wl))]
+# Curve generation function (Gaussian only)
+peak_curve <- function(wl, peak, sigma, amp, base = 0) {
+  if (is.na(peak)) rep(amp, length(wl))  # Flat for Black/White
+  else base + amp * exp(-((wl - peak)^2) / (2 * sigma^2))
 }
 
-# Add noise function
-add_noise <- function(curve) curve + rnorm(length(curve), 0, 3)  # SD = 3% noise
+# Add noise and light smoothing
+add_noise_and_smooth <- function(curve, wl) {
+  noisy_curve <- curve + rnorm(length(curve), 0, 2)  # Reduced to 2% for smoothness
+  smoothed_curve <- numeric(length(wl))
+  for (i in 1:length(wl)) {
+    window <- pmax(1, i-1):pmin(length(wl), i+1)  # 3-point moving average (~5 nm)
+    smoothed_curve[i] <- mean(noisy_curve[window], na.rm = TRUE)
+  }
+  pmax(0, pmin(100, smoothed_curve))
+}
 
-# Simulate data for one species (no fading)
+# Simulate data for one species
 simulate_species <- function(species, patches, wl) {
   data_list <- list()
-  for (i in 1:3) {  # 3 individuals, no fading
+  for (i in 1:3) {  # 3 individuals
     ind_patches <- list()
     for (p in patches) {
       col <- colors[[p]]
-      if (col$type == "peak") {
+      if (is.null(col$peaks)) {  # Single peak or flat
         peak <- col$peak + rnorm(1, 0, 15)
-        amp <- col$amp * (1 + rnorm(1, 0, 0.15))  # No fade multiplier
-        curve <- peak_curve(wl, peak, col$sigma, amp)
-      } else if (col$type == "step") {
-        R50 <- col$R50 + rnorm(1, 0, 15)
         amp <- col$amp * (1 + rnorm(1, 0, 0.15))
-        curve <- step_curve(wl, R50, col$k, amp)
-      } else if (col$type == "flat") {
-        amp <- col$amp * (1 + rnorm(1, 0, 0.15))
-        curve <- flat_curve(wl, amp)
-      } else {  # complex
-        if (!is.null(col$peaks)) {
-          curve <- peak_curve(wl, col$peaks[1] + rnorm(1, 0, 15), col$sigmas[1], col$amps[1] * (1 + rnorm(1, 0, 0.15))) +
-            peak_curve(wl, col$peaks[2] + rnorm(1, 0, 15), col$sigmas[2], col$amps[2] * (1 + rnorm(1, 0, 0.15)))
-        } else {
-          curve <- step_curve(wl, col$R50 + rnorm(1, 0, 15), col$k, col$amp * (1 + rnorm(1, 0, 0.15))) +
-            peak_curve(wl, col$uv_peak, 30, col$uv_amp * (1 + rnorm(1, 0, 0.15)))
-        }
+        curve <- peak_curve(wl, peak, col$sigma, amp, col$base)
+      } else {  # Complex (dual peaks)
+        curve <- peak_curve(wl, col$peaks[1] + rnorm(1, 0, 15), col$sigmas[1], col$amps[1] * (1 + rnorm(1, 0, 0.15)), col$base) +
+          peak_curve(wl, col$peaks[2] + rnorm(1, 0, 15), col$sigmas[2], col$amps[2] * (1 + rnorm(1, 0, 0.15)), 0)
       }
-      curve <- pmax(0, pmin(100, smooth_curve(curve, wl)))  # Apply reduced smoothing
-      curve <- add_noise(curve)  # Add noise
-      curve <- pmax(0, pmin(100, curve))  # Re-clamp after noise
+      curve <- add_noise_and_smooth(curve, wl)
       ind_patches[[p]] <- curve
     }
     data_list[[paste0("Ind", i)]] <- ind_patches
@@ -142,111 +131,31 @@ simulate_species <- function(species, patches, wl) {
 
 # Generate full dataset
 all_data <- do.call(rbind, lapply(names(species_colors), function(s) simulate_species(s, species_colors[[s]], wavelengths)))
-
-# Save the data
 write.csv(all_data, "Hawaiian_Reef_Fish_Reflectance.csv", row.names = FALSE)
 
-# Color Validation Notes:
-# Several approaches were attempted to validate colors using the pavo package:
-#
-# 1. Direct spec2rgb conversion:
-#    - Tried using pavo::spec2rgb(rspec_data) directly
-#    - Failed due to wavelength range mismatch with built-in visual systems
-#
-# 2. CIE2 color space:
-#    - Attempted using visual = "cie2" in vismodel
-#    - Required wavelength range 360-830nm
-#    - Data only covers 400-800nm, causing mismatch errors
-#
-# 3. Standard human vision:
-#    - Tried visual = "segment" in vismodel
-#    - Still encountered wavelength range issues
-#
-# 4. Attempted solutions:
-#    - Interpolation to different wavelength ranges (380-700nm, 360-830nm)
-#    - Different step sizes (1nm vs 5nm)
-#    - Various data formats (matrix vs data frame)
-#    - None resolved the fundamental wavelength mismatch
-#
-# Future improvements could include:
-# 1. Extending wavelength range in simulation to match CIE2 (360-830nm)
-# 2. Using alternative color space conversion methods
-# 3. Implementing custom color conversion using specific cone sensitivities
-# 4. Using colorspace package directly instead of pavo for RGB conversion
+# Color validation with pavo
+validate_colors <- function(data) {
+  mean_specs <- data %>%
+    group_by(Patch, Wavelength) %>%
+    summarise(Reflectance = mean(Reflectance), .groups = "drop") %>%
+    pivot_wider(names_from = Wavelength, values_from = Reflectance)
+  
+  rspec_data <- as.rspec(mean_specs, lim = c(350, 800))
+  rgb_colors <- spec2rgb(rspec_data, visual = "cie2", percent = TRUE)
+  
+  cat("\nSimulated Colors (RGB) vs. Expected:\n")
+  for (i in 1:nrow(rgb_colors)) {
+    patch <- mean_specs$Patch[i]
+    rgb <- rgb_colors[i, ]
+    cat(sprintf("%s: RGB(%d, %d, %d) - Expected: %s\n", patch, rgb$r, rgb$g, rgb$b, patch))
+  }
+  
+  plot(rspec_data, main = "Simulated Mean Spectra per Patch (350-800 nm)")
+  invisible(rgb_colors)
+}
 
-# # Optional color validation (requires pavo package) - commented out for now
-# if (requireNamespace("pavo", quietly = TRUE)) {
-#   validate_colors <- function(data, colors) {
-#     # Calculate mean spectra per patch
-#     mean_specs <- data %>%
-#       group_by(Patch, Wavelength) %>%
-#       summarise(Reflectance = mean(Reflectance), .groups = "drop")
-#     
-#     # Print wavelength range
-#     cat("\nWavelength range in data:", 
-#         sprintf("%.1f to %.1f nm\n", 
-#                 min(mean_specs$Wavelength), 
-#                 max(mean_specs$Wavelength)))
-#     
-#     # Filter to standard visible range (400-700nm)
-#     mean_specs <- mean_specs %>%
-#       filter(Wavelength >= 400 & Wavelength <= 700) %>%
-#       # Interpolate to 5nm steps
-#       group_by(Patch) %>%
-#       complete(Wavelength = seq(400, 700, by = 5)) %>%
-#       mutate(Reflectance = approx(Wavelength[!is.na(Reflectance)], 
-#                                  Reflectance[!is.na(Reflectance)], 
-#                                  xout = Wavelength)$y) %>%
-#       ungroup()
-#     
-#     # Create data frame in pavo format
-#     pavo_data <- data.frame(
-#       wl = sort(unique(mean_specs$Wavelength))
-#     )
-#     
-#     # Add each patch as a column
-#     for(patch in unique(mean_specs$Patch)) {
-#       patch_data <- mean_specs %>%
-#         filter(Patch == patch) %>%
-#         arrange(Wavelength) %>%
-#         pull(Reflectance)
-#       pavo_data[[patch]] <- patch_data
-#     }
-#     
-#     # Convert to rspec object and calculate RGB values
-#     rspec_data <- pavo::as.rspec(pavo_data)
-#     rgb_colors <- pavo::spec2rgb(rspec_data)
-#     
-#     # Print results
-#     cat("\nSimulated Colors (RGB) vs. Expected:\n")
-#     patch_names <- unique(data$Patch)
-#     for (i in 1:length(patch_names)) {
-#       patch <- patch_names[i]
-#       rgb <- rgb_colors[i,]
-#       cat(sprintf("%s: RGB(%d, %d, %d) - Expected: %s\n", 
-#                   patch, rgb[1]*255, rgb[2]*255, rgb[3]*255, patch))
-#     }
-#     
-#     # Plot spectra with custom colors
-#     par(mfrow = c(2, 1))
-#     plot(rspec_data, main = "Simulated Mean Spectra per Patch")
-#     
-#     # Plot RGB representation using the calculated colors
-#     barplot(t(rgb_colors), beside = TRUE, 
-#             names.arg = patch_names,
-#             main = "RGB Values per Patch",
-#             col = c("red", "green", "blue"),
-#             legend.text = c("R", "G", "B"),
-#             args.legend = list(x = "topright"))
-#     par(mfrow = c(1, 1))
-#     
-#     # Return the RGB colors for potential further use
-#     return(rgb_colors)
-#   }
-#   
-#   # Run validation if pavo is available
-#   rgb_values <- validate_colors(all_data, colors)
-# } else {
-#   cat("\nNote: Color validation skipped (pavo package not available)\n")
-#   cat("To enable color validation, install pavo package and XQuartz\n")
-# }
+if (requireNamespace("pavo", quietly = TRUE)) {
+  validate_colors(all_data)
+} else {
+  cat("\nNote: Install 'pavo' for color validation.\n")
+}
