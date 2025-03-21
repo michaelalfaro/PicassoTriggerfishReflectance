@@ -12,10 +12,11 @@ library(ggplot2)
 library(gridExtra)
 library(signal)  # For derivatives
 library(hyperSpec)  # For spectral angle (simplified ACE)
+library(stats)  # For PCA and statistical tests
 ```
 
 ## Overview
-This demo analyzes simulated reflectance data for four color patches (White, Black, Orange, Blue) in Picasso triggerfish (*Rhinecanthus aculeatus*) across 400-800 nm for five individuals with three repeated measures per patch. It replicates figures from Kolmann et al. (2021)—Figures 3, 5, 6, and 7—and explains the use of Equations 1 and 2 for spectral angle analysis. The data includes measurement error (SD = 2%), inter-individual variation (±10% amplitude, ±20 nm peak shift), and one faded individual (30% reduced reflectance) to test detection.
+This demo analyzes simulated reflectance data for four color patches (White, Black, Orange, Blue) in Picasso triggerfish (*Rhinecanthus aculeatus*) across 400-800 nm for five individuals with three repeated measures per patch. It replicates figures from Kolmann et al. (2021)—Figures 3, 5, 6, and 7—and explores alternative methods to distinguish patches within individuals. The data includes measurement error (SD = 2%), inter-individual variation (±10% amplitude, ±20 nm peak shift), and one faded individual (30% reduced reflectance).
 
 ## Data Simulation
 The reflectance data was simulated with biologically realistic curves:
@@ -160,10 +161,140 @@ ggplot(ace_data, aes(x = Patch, y = Individual, fill = Angle)) +
 - **Simplifications**: Here, we use only Equation 1 (spectral angle) due to the small dataset (5 individuals, 4 patches). Calculating \(\Sigma_b\) (background covariance) requires a larger sample to be meaningful, so we omit Equation 2's full ACE statistic. This simplification assumes the patch mean (\(\mathbf{S}\)) is the target, and individual deviations (e.g., fading) increase the angle. For real data with more samples, \(\Sigma_b\) would be computed from all non-target spectra to improve specificity.
 - **Does ACE Work Here?**: Yes, but with caveats. With only 5 individuals and 20 spectra (5 × 4 patches), the dataset is small for full ACE (which thrives on larger, noisier datasets). The spectral angle alone effectively highlights variation (e.g., the faded individual), but lacks the robustness of \(\Sigma_b\)-adjusted ACE. For your real data, with potentially more individuals, full ACE would be feasible and more powerful.
 
-## Interpretation
-- **Figure 3**: Patch-specific profiles average out within- and between-individual variation, with SD showing combined spread.
-- **Figure 5**: Derivatives focus on mean patch trends, masking individual variation.
-- **Figure 6**: Explicitly shows within-individual (replicate spread) and between-individual (curve differences) variation, with the mean as a reference.
-- **Figure 7**: Spectral angles capture between-individual variation relative to patch means, with within-individual variation averaged out. The faded individual should have higher angles.
+## Alternative Methods for Patch Differentiation
+
+Given your focus on distinguishing color patches within fish, here are three alternatives to ACE, using mean spectra per patch per individual.
+
+### Alternative 1: Euclidean Distance
+Measures absolute spectral difference, including amplitude.
+
+```{r alt1-euclidean}
+euclidean_dist <- function(x, s) {
+  sqrt(sum((x - s)^2, na.rm = TRUE))
+}
+
+euclid_data <- ace_data  # Reuse structure
+for (i in 1:nrow(euclid_data)) {
+  ind <- euclid_data$Individual[i]
+  patch <- euclid_data$Patch[i]
+  x <- as.numeric(mean_spectra[mean_spectra$Individual == ind & mean_spectra$Patch == patch, -(1:2)])
+  s <- as.numeric(patch_means[patch_means$Patch == patch, -1])
+  euclid_data$Angle[i] <- euclidean_dist(x, s)  # Rename 'Angle' to 'Distance'
+}
+colnames(euclid_data)[3] <- "Distance"
+
+ggplot(euclid_data, aes(x = Patch, y = Individual, fill = Distance)) +
+  geom_tile() +
+  scale_fill_gradient(low = "blue", high = "red", name = "Euclidean Distance") +
+  labs(title = "Alternative 1: Euclidean Distance",
+       x = "Target Patch", y = "Test Individual",
+       caption = "Euclidean distance between individual means and patch means. Within-individual variation is averaged; between-individual variation (e.g., fading) increases distance.") +
+  theme_minimal()
+```
+
+**Explanation**: Euclidean distance captures both shape and amplitude differences, making it sensitive to fading (higher distances). It's simpler than ACE but lacks background adjustment.
+
+### Alternative 2: Principal Component Analysis (PCA)
+Reduces dimensionality to compare patches.
+
+```{r alt2-pca}
+spectra_matrix <- mean_spectra[, -(1:2)] %>% as.matrix()
+pca_result <- prcomp(spectra_matrix, scale. = TRUE)
+pca_data <- as.data.frame(pca_result$x) %>%
+  mutate(Individual = mean_spectra$Individual, Patch = mean_spectra$Patch)
+
+ggplot(pca_data, aes(x = PC1, y = PC2, color = Patch, shape = Individual)) +
+  geom_point(size = 3) +
+  labs(title = "Alternative 2: PCA of Spectral Signatures",
+       x = "PC1", y = "PC2",
+       caption = "PCA on mean spectra per patch per individual. Within-individual variation is averaged; between-individual and within-fish patch differences drive separation.") +
+  theme_minimal()
+```
+
+**Explanation**: PCA projects 81-band spectra into principal components (PC1, PC2 explain most variance). Patches cluster by spectral similarity; between-individual variation (e.g., fading) scatters points within clusters.
+
+### Alternative 3: Mahalanobis Distance
+Measures distance adjusted for covariance.
+
+```{r alt3-mahalanobis}
+mahalanobis_dist <- function(x, mean_vec, cov_mat, lambda = 0.1) {
+  # Add regularization to covariance matrix
+  n <- nrow(cov_mat)
+  regularized_cov <- cov_mat + lambda * diag(n)
+  diff <- x - mean_vec
+  sqrt(t(diff) %*% solve(regularized_cov) %*% diff)
+}
+
+mahal_data <- ace_data
+cov_mat <- cov(spectra_matrix)  # Covariance of all spectra
+for (i in 1:nrow(mahal_data)) {
+  ind <- mahal_data$Individual[i]
+  patch <- mahal_data$Patch[i]
+  x <- as.numeric(mean_spectra[mean_spectra$Individual == ind & mean_spectra$Patch == patch, -(1:2)])
+  s <- as.numeric(patch_means[patch_means$Patch == patch, -1])
+  mahal_data$Angle[i] <- mahalanobis_dist(x, s, cov_mat)
+}
+colnames(mahal_data)[3] <- "Distance"
+
+ggplot(mahal_data, aes(x = Patch, y = Individual, fill = Distance)) +
+  geom_tile() +
+  scale_fill_gradient(low = "blue", high = "red", name = "Mahalanobis Distance") +
+  labs(title = "Alternative 3: Mahalanobis Distance",
+       x = "Target Patch", y = "Test Individual",
+       caption = "Mahalanobis distance between individual means and patch means, using regularized covariance. Within-individual variation is averaged; between-individual variation affects distances.") +
+  theme_minimal()
+```
+
+**Explanation**: Mahalanobis distance accounts for spectral covariance, similar to ACE's \(\Sigma_b\), but compares to a single mean. It's robust to correlated bands but requires sufficient spectra (here, limited by 20 means).
+
+## Statistical Index for Patch Differences
+To test if patches are statistically distinct within fish, compute spectral angles per individual and use ANOVA (or Kruskal-Wallis if non-normal) with pairwise comparisons.
+
+```{r patch-stats}
+# Create all possible patch pairs
+patch_pairs <- combn(patches, 2, paste, collapse = " vs. ")
+
+# Calculate angles between all patch pairs for each individual
+angle_data <- data.frame()
+for (ind in unique(data$Individual)) {
+  for (i in 1:(length(patches)-1)) {
+    for (j in (i+1):length(patches)) {
+      x <- as.numeric(mean_spectra[mean_spectra$Individual == ind & mean_spectra$Patch == patches[i], -(1:2)])
+      s <- as.numeric(mean_spectra[mean_spectra$Individual == ind & mean_spectra$Patch == patches[j], -(1:2)])
+      angle <- spectral_angle(x, s)
+      angle_data <- rbind(angle_data, 
+                         data.frame(Individual = ind,
+                                  Patch_Pair = paste(patches[i], "vs.", patches[j]),
+                                  Angle = angle))
+    }
+  }
+}
+
+# Kruskal-Wallis test (non-parametric)
+kw_test <- kruskal.test(Angle ~ Patch_Pair, data = angle_data)
+print(kw_test)
+
+# Pairwise Wilcoxon tests
+pairwise <- pairwise.wilcox.test(angle_data$Angle, angle_data$Patch_Pair, p.adjust.method = "BH")
+print(pairwise)
+
+ggplot(angle_data, aes(x = Patch_Pair, y = Angle)) +
+  geom_boxplot() +
+  labs(title = "Spectral Angles Between Patch Pairs",
+       x = "Patch Pair", y = "Spectral Angle (°)",
+       caption = "Boxplots of spectral angles between patch pairs within individuals. Kruskal-Wallis test assesses overall differences; pairwise p-values indicate specific distinctions.") +
+  theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Summary of Discussion on ULTRIS X50 and ACE
+
+The ULTRIS X50 (400-800 nm, ~101 bands at 4 nm binning) increases spectral dimensions from 81 to 101, raising the minimum spectra for full ACE from 162-405 to 202-505. Sampling 3 patches per color (12 total) per individual with 3 replicates yields 36 spectra per fish; 20 individuals (720 spectra) suffice for ACE, prioritizing individuals over patches. The data cube's pixel richness allows averaging (e.g., 10,000 pixels per patch), reducing noise and enabling spectral angle alone to distinguish patches within fish, though ACE excels for subtle signals. Focus on patch differentiation supports spectral angle or alternatives (Euclidean, PCA, Mahalanobis), with statistical tests (e.g., Kruskal-Wallis, pairwise p-values) confirming distinctions.
+
+## Final Interpretation
+- **ACE**: Detects patch differences but is limited here; alternatives suffice.
+- **Euclidean**: Highlights amplitude shifts (e.g., fading).
+- **PCA**: Visualizes patch clustering within fish.
+- **Mahalanobis**: Adjusts for covariance, robust for patch separation.
+- **Stats**: Pairwise p-values confirm if patches are distinct within individuals.
 
 This template is ready for your real data—replace the CSV and adjust as needed.
