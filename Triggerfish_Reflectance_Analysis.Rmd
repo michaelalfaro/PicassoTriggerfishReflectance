@@ -11,7 +11,7 @@ library(tidyverse)
 library(ggplot2)
 library(gridExtra)
 library(signal)  # For derivatives
-library(hyperSpec)  # For spectral angle (simplified ACE)
+library(hyperSpec)  # For spectral angle
 library(stats)  # For PCA and statistical tests
 
 # Define consistent colors for patches
@@ -23,19 +23,19 @@ patch_colors <- c(
 )
 ```
 
-## Overview
-This demo explores simulated reflectance data for four color patches (White, Black, Orange, Blue) on Picasso triggerfish (*Rhinecanthus aculeatus*) across 400-800 nm, with five fish, each measured three times per patch. We're mimicking analyses from Kolmann et al. (2021) to see if we can tell these patches apart within a fish—like detectives comparing color fingerprints! The data has some noise (measurement error, SD = 2%), differences between fish (±10% brightness, ±20 nm shifts), and one fish is faded (30% dimmer) to test our methods.
+# 1.0 Introduction
+This demo explores simulated reflectance data for four color patches (White, Black, Orange, Blue) on Picasso triggerfish (*Rhinecanthus aculeatus*) across 400-800 nm, with five fish, each measured three times per patch. We're mimicking analyses from Kolmann et al. (2021) to see if we can distinguish these patches within a fish—like detectives comparing color fingerprints! The data includes noise (measurement error, SD = 2%), inter-fish variation (±10% brightness, ±20 nm shifts), and one faded fish (30% dimmer) to challenge our methods.
 
-## Data Simulation
-We made fake data that looks real:
-- **White**: Bright (~70-90%), peaks around 500 nm (blue-green).
+## 1.1 Data Simulation
+We created fake data mimicking real triggerfish colors:
+- **White**: Bright (~70-90%), peaks ~500 nm (blue-green).
 - **Black**: Dull (~10%), flat across wavelengths.
-- **Orange**: Bright (~90%), peaks at 620 nm (orange-red).
-- **Blue**: Bright (~85%), peaks at 470 nm (blue).
+- **Orange**: Bright (~90%), peaks ~620 nm (orange-red).
+- **Blue**: Bright (~85%), peaks ~470 nm (blue).
 
-Think of these as "color recipes" we expect on a triggerfish, with a bit of randomness to mimic nature.
+These "color recipes" include randomness to reflect natural variation.
 
-## Load Data
+## 1.2 Load Data
 ```{r load-data}
 data <- read.csv("Picasso_Triggerfish_Reflectance.csv")
 patches <- unique(data$Patch)  # Our four colors
@@ -44,15 +44,16 @@ head(data)
 ```
 
 **Breakdown**:
-- **What's Happening**: We load a table with columns: `Individual` (fish ID), `Patch` (color), `Replicate` (measurement number), `Wavelength` (400-800 nm), and `Reflectance` (brightness %).
-- **Data Structure**: A long list—9720 rows (5 fish × 4 patches × 3 replicates × 81 wavelengths). Each row is one data point.
-- **Illustration**: Imagine a spreadsheet where each fish gets a block of rows, split by color, then by replicate, with columns for every 5 nm step from 400 to 800.
-- **Why It Matters**: This structure lets us slice and dice data flexibly—by fish, color, or wavelength—for all our analyses.
+- **What**: Loads a table with `Individual` (fish ID), `Patch` (color), `Replicate` (measurement number), `Wavelength` (400-800 nm), `Reflectance` (% brightness).
+- **Structure**: 9720 rows (5 fish × 4 patches × 3 replicates × 81 wavelengths)—a long list of data points.
+- **Illustration**: Picture a spreadsheet—each fish has a block, split by color, then replicate, with 81 wavelength columns (5 nm steps).
+- **Why**: This flexible format lets us analyze by fish, patch, or wavelength, building our detective case.
 
-## Figure 3: Comparative Spectral Signatures
-Let's see the average "color fingerprint" for each patch.
+# 2.0 Exploratory Spectral Analysis
+Let's visualize the data to get a feel for our patches' "fingerprints."
 
-```{r fig3}
+## 2.1 Figure 2.1-1: Comparative Spectral Signatures
+```{r fig-2.1-1}
 fig3_data <- data %>%
   group_by(Patch, Wavelength) %>%
   summarise(Mean = mean(Reflectance), SD = sd(Reflectance), .groups = "drop")
@@ -62,33 +63,21 @@ ggplot(fig3_data, aes(x = Wavelength, y = Mean, color = Patch)) +
   geom_ribbon(aes(ymin = Mean - SD, ymax = Mean + SD, fill = Patch), alpha = 0.2, linetype = 0) +
   scale_color_manual(values = patch_colors) +
   scale_fill_manual(values = patch_colors) +
-  labs(title = "Figure 3: Comparative Spectral Signatures",
+  labs(title = "Figure 2.1-1: Comparative Spectral Signatures",
        x = "Wavelength (nm)", y = "Reflectance (%)",
-       caption = "Mean reflectance per patch across all fish and replicates. SD bands show within-patch wiggle (error + fish differences).") +
+       caption = "Mean reflectance per patch across all fish and replicates (n=15 per point). SD bands show within-patch variation (measurement error + fish differences). Between-fish variation is averaged out. Similar to Kolmann et al. (2021) Figure 3, but we use simulated data with broader curves.") +
   theme_minimal()
 ```
 
 **Breakdown**:
-- **Step 1: Grouping and Averaging**
-  - **Code**: `group_by(Patch, Wavelength) %>% summarise(Mean = mean(Reflectance), SD = sd(Reflectance))`
-  - **What**: For each color and wavelength, we average all 15 measurements (5 fish × 3 replicates) and calculate the wiggle (standard deviation).
-  - **Structure**: From 9720 rows to 324 (4 patches × 81 wavelengths), with columns: `Patch`, `Wavelength`, `Mean`, `SD`.
-  - **Illustration**: Picture a smaller table—each row is a color at a wavelength, with a mean and SD column. Draw four lines (one per color) with shaded bands around them.
-  - **Why**: This simplifies our messy data into smooth curves we can compare, showing typical patch "fingerprints."
+- **Step 1**: `group_by(Patch, Wavelength) %>% summarise(...)` averages 15 measurements (5 fish × 3 replicates) per patch per wavelength, computes SD (324 rows).
+- **Step 2**: Plot curves with SD bands—colors match patches.
+- **Why**: Shows typical "fingerprints"—baseline for all analyses.
+- **Link to Kolmann**: Like Figure 3 (comparative signatures), but their real fish data had sharper peaks; our simulated curves are broader due to simpler models.
+- **Key Takeaway**: Distinct curves suggest patches differ; overlap hints they're similar.
 
-- **Step 2: Plotting**
-  - **Code**: `ggplot(...) + geom_line() + geom_ribbon(...)`
-  - **What**: Plot wavelength (x) vs. mean reflectance (y), with colored lines for each patch and shaded bands for SD.
-  - **Why**: Visualizes how patches differ across the spectrum—key for our "are they distinguishable?" question.
-
-- **Expectations**:
-  - **Distinguishable Patches**: Curves spread apart (e.g., Blue peaks at 470 nm, Orange at 620 nm), with little SD overlap—clear "fingerprints."
-  - **Not Distinguishable**: Curves overlap a lot, SD bands blur together—colors look too similar.
-
-## Figure 5: First Derivatives
-Now, let's zoom into how fast these "fingerprints" change.
-
-```{r fig5}
+## 2.2 Figure 2.2-1: First Derivatives
+```{r fig-2.2-1}
 fig5_data <- fig3_data %>%
   group_by(Patch) %>%
   arrange(Wavelength) %>%
@@ -98,80 +87,28 @@ fig5_data <- fig3_data %>%
 ggplot(fig5_data, aes(x = Wavelength, y = Deriv, color = Patch)) +
   geom_line() +
   scale_color_manual(values = patch_colors) +
-  labs(title = "Figure 5: First Derivative of Spectral Signatures",
+  labs(title = "Figure 2.2-1: First Derivative of Spectral Signatures",
        x = "Wavelength (nm)", y = "dR/dλ",
-       caption = "First derivative of mean reflectance per patch. Shows rate of change.") +
+       caption = "First derivative of mean reflectance per patch (n=15 per point). Shows rate of change across wavelengths; within-patch variation averaged. Matches Kolmann et al. (2021) Figure 5, identifying key change regions (e.g., 470 nm for Blue).") +
   theme_minimal()
 ```
 
 **Breakdown**:
-- **Step 1: Calculate Derivative**
-  - **Code**: `mutate(Deriv = c(NA, diff(Mean) / diff(Wavelength)[1]))`
-  - **What**: For each patch, subtract each mean from the next, divide by 5 nm (wavelength step), to get the slope. First point is NA (no prior value).
-  - **Structure**: Still 324 rows, adds `Deriv` column (slope at each wavelength).
-  - **Illustration**: Sketch the Figure 3 curves, then draw tangent lines at points—steep slopes mean big `Deriv` values.
-  - **Why**: Highlights where curves change fastest (e.g., peaks), helping spot unique patch features.
+- **Step 1**: `mutate(Deriv = ...)` calculates slopes between consecutive means (5 nm steps), NA for first point (324 rows).
+- **Step 2**: Plot slopes—colors match patches.
+- **Why**: Highlights "action zones" (e.g., peaks) where patches differ most.
+- **Link to Kolmann**: Direct analog to Figure 5—both show derivative peaks (e.g., ~470 nm), though their real data had more detail.
+- **Key Takeaway**: Sharp, unique peaks mean distinguishable patches; overlapping slopes suggest similarity.
 
-- **Step 2: Plotting**
-  - **Code**: `ggplot(...) + geom_line()`
-  - **What**: Plot wavelength vs. slope, colored by patch.
-  - **Why**: Shows patch-specific "action zones"—where they stand out.
+# 3.0 Analysis Strategies
+Now, let's group our methods by how they tackle patch differentiation.
 
-- **Expectations**:
-  - **Distinguishable**: Sharp, distinct peaks/dips (e.g., Blue at ~470 nm, Orange at ~620 nm)—different change patterns.
-  - **Not Distinguishable**: Slopes overlap or flatline—no clear "action zones."
+## 3.1 Spectral Angle and ACE Methods
+These use spectral angle ($\alpha = \cos^{-1} \left( \frac{\mathbf{x} \cdot \mathbf{S}}{\|\mathbf{x}\| \|\mathbf{S}\|} \right)$) to compare shape similarity, inspired by Kolmann et al. (2021)'s ACE approach.
 
-## Figure 6: Intraspecific Variation
-Let's peek at how much fish differ within each patch.
-
-```{r fig6}
-fig6_plots <- lapply(patches, function(p) {
-  p_data <- subset(data, Patch == p)
-  mean_data <- aggregate(Reflectance ~ Wavelength, data = p_data, FUN = mean)
-  
-  ggplot() +
-    geom_line(data = p_data, 
-              aes(x = Wavelength, y = Reflectance, group = interaction(Individual, Replicate)),
-              alpha = 0.3, color = patch_colors[p]) +
-    geom_line(data = mean_data,
-              aes(x = Wavelength, y = Reflectance),
-              color = "red", size = 1) +
-    labs(title = paste("Patch:", p),
-         x = "Wavelength (nm)", y = "Reflectance (%)",
-         caption = "Thin lines show within-fish error (SD = 2%) and between-fish variation (e.g., fading). Red line is patch mean.") +
-    theme_minimal()
-})
-
-grid.arrange(grobs = fig6_plots, ncol = 2)
-```
-
-**Breakdown**:
-- **Step 1: Filter and Average**
-  - **Code**: `subset(data, Patch == p)` and `aggregate(...)`
-  - **What**: Pick one patch's data (2430 rows: 5 fish × 3 replicates × 81 wavelengths), then average across all for the red line (81 rows).
-  - **Structure**: `p_data` keeps all details; `mean_data` is just `Wavelength` and `Reflectance`.
-  - **Illustration**: Draw a big table (all data), circle one patch's rows, then shrink it to one mean curve.
-  - **Why**: Shows raw variation (thin lines) vs. the "typical" patch (red), setting up patch comparison.
-
-- **Step 2: Plotting**
-  - **Code**: `ggplot() + geom_line(...)`
-  - **What**: Plot all 15 curves per patch faintly, overlay the mean in bold red.
-  - **Why**: Lets us see if fish differ enough to affect patch identity.
-
-- **Expectations**:
-  - **Distinguishable**: Thin lines cluster tightly around unique red means—patch "fingerprints" hold despite fish variation.
-  - **Not Distinguishable**: Thin lines sprawl widely or overlap other patches' means—too much variation blurs patch identity.
-
-## Figure 7: Adaptive Coherence Estimator (ACE)
-Can we match each fish's patch to its "typical" color?
-
-### Equations
-- **Spectral Angle (α)**: \(\alpha = \cos^{-1} \left( \frac{\mathbf{x} \cdot \mathbf{S}}{\|\mathbf{x}\| \|\mathbf{S}\|} \right)\)  
-  Compares shape similarity between a fish's patch (\(\mathbf{x}\)) and the patch mean (\(\mathbf{S}\)).
-- **ACE**: \(D_{ACE} = \frac{(\mathbf{S}^T \Sigma_b^{-1} \mathbf{x})^2}{(\mathbf{S}^T \Sigma_b^{-1} \mathbf{S})(\mathbf{x}^T \Sigma_b^{-1} \mathbf{x})}\)  
-  Adds background variation (\(\Sigma_b\))—not used here due to small data.
-
-```{r fig7}
+### 3.1.1 Figure 3.1-1: ACE Spectral Matching
+```{r fig-3.1-1}
+# Calculate mean spectra if not already done
 mean_spectra <- data %>%
   group_by(Individual, Patch, Wavelength) %>%
   summarise(Mean = mean(Reflectance), .groups = "drop") %>%
@@ -206,129 +143,136 @@ for (i in 1:nrow(ace_data)) {
 ggplot(ace_data, aes(x = Patch, y = Individual, fill = Angle)) +
   geom_tile() +
   scale_fill_gradient(low = "blue", high = "red", name = "Spectral Angle (°)") +
-  labs(title = "Figure 7: ACE Spectral Matching",
+  labs(title = "Figure 3.1-1: ACE Spectral Matching",
        x = "Target Patch", y = "Test Individual",
-       caption = "Spectral angles between individual means and patch means. Within-individual variation is averaged per individual. Between-individual variation drives angle differences (e.g., faded individual has higher angles).") +
+       caption = "Spectral angles between fish means (n=3 replicates) and patch means (n=15). Within-fish variation averaged; between-fish variation (e.g., fading) increases angles. Simplified from Kolmann et al. (2021) Figure 7—uses angle only, no background covariance.") +
   theme_minimal()
 ```
 
 **Breakdown**:
-- **Step 1: Mean Spectra**
-  - **Code**: `group_by(Individual, Patch, Wavelength) %>% summarise(...)`
-  - **What**: Average 3 replicates per fish per patch (20 rows: 5 fish × 4 patches), spread wavelengths into columns.
-  - **Structure**: From 9720 rows to 20 rows, each with 81 wavelength columns.
-  - **Illustration**: Draw a grid—rows are fish-patch combos, columns are wavelengths.
-  - **Why**: Creates \(\mathbf{x}\) (fish spectra) for the spectral angle equation.
+- **Step 1**: Average replicates (20 rows × 81 columns) and patches (4 rows × 81 columns).
+- **Step 2**: Compute $\alpha$—shape similarity across all bands.
+- **Step 3**: Heatmap—low angles = good match.
+- **Why**: Tests if fish patches align with "typical" shapes using all 81 bands.
+- **Link to Kolmann**: Mirrors Figure 7 (ACE matching), but they used full ACE ($D_{ACE}$) with $\Sigma_b$; we simplify to $\alpha$ due to small sample size (60 spectra vs. 81 bands).
+- **Key Takeaway**: Low within-patch angles, high between = distinguishable; uniform angles = not.
 
-- **Step 2: Patch Means**
-  - **Code**: `group_by(Patch, Wavelength) %>% summarise(...)`
-  - **What**: Average across all fish for each patch (4 rows, 81 columns).
-  - **Structure**: Simplifies to \(\mathbf{S}\) (target spectra).
-  - **Illustration**: Smaller grid—4 rows (patches), 81 columns.
-  - **Why**: Defines the "typical" patch for comparison in \(\alpha\).
+### 3.1.2 Figure 3.1-2: Within-Fish Patch Pair Angles
+```{r fig-3.1-2}
+patch_pairs <- combn(patches, 2, paste, collapse = " vs. ")
 
-- **Step 3: Spectral Angle**
-  - **Code**: `spectral_angle <- function(x, s) {...}`
-  - **What**: Compute angle between \(\mathbf{x}\) and \(\mathbf{S}\) using dot product and norms.
-  - **Illustration**: Sketch two arrows (spectra), measure angle between them—small angle = similar shape.
-  - **Why**: Core of ACE—tests if fish patches match their "typical" shape (Eq. 1).
+angle_data <- data.frame()
+for (ind in unique(data$Individual)) {
+  for (i in 1:(length(patches)-1)) {
+    for (j in (i+1):length(patches)) {
+      x <- as.numeric(mean_spectra[mean_spectra$Individual == ind & mean_spectra$Patch == patches[i], -(1:2)])
+      s <- as.numeric(mean_spectra[mean_spectra$Individual == ind & mean_spectra$Patch == patches[j], -(1:2)])
+      angle <- spectral_angle(x, s)
+      angle_data <- rbind(angle_data, 
+                          data.frame(Individual = ind,
+                                     Patch_Pair = paste(patches[i], "vs.", patches[j]),
+                                     Angle = angle))
+    }
+  }
+}
 
-- **Step 4: Plotting**
-  - **Code**: `ggplot(...) + geom_tile(...)`
-  - **What**: Heatmap—angles per fish per patch, colored by size.
-  - **Why**: Shows match quality—low angles mean good fits.
+# Kruskal-Wallis and pairwise tests
+kw_test <- kruskal.test(Angle ~ Patch_Pair, data = angle_data)
+pairwise <- pairwise.wilcox.test(angle_data$Angle, angle_data$Patch_Pair, p.adjust.method = "BH")
 
-- **Expectations**:
-  - **Distinguishable**: Low angles within patches, high angles between—clear patch "clubs."
-  - **Not Distinguishable**: Angles similar across patches—fish don't match "typical" uniquely.
+ggplot(angle_data, aes(x = Patch_Pair, y = Angle)) +
+  geom_boxplot(aes(fill = Patch_Pair)) +
+  scale_fill_manual(values = colorRampPalette(unname(patch_colors))(length(unique(angle_data$Patch_Pair)))) +
+  labs(title = "Figure 3.1-2: Spectral Angles Between Patch Pairs",
+       x = "Patch Pair", y = "Spectral Angle (°)",
+       caption = paste("Angles between patch pairs within fish (n=5 fish). Kruskal-Wallis p =", round(kw_test$p.value, 3), ". Pairwise p-values test distinctions. Builds on Kolmann et al. (2021)'s spectral angle concept, but focuses within-fish differences.")) +
+  theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-## Alternative Methods for Patch Differentiation
-Let's try other ways to spot patch differences, including focusing on **diagnostic spectral bands**.
+cat("Kruskal-Wallis Test:\n")
+print(kw_test)
+cat("\nPairwise Wilcoxon Tests (BH-adjusted):\n")
+print(pairwise)
+```
 
-### What Are Diagnostic Spectral Bands?
-Diagnostic spectral bands are specific wavelengths where reflectance differs most between patches—like the "key clues" in our color fingerprint case. For example, Blue might peak at 470 nm while Orange peaks at 620 nm; these bands help us tell them apart. In Kolmann et al. (2021), they found bands like 400-450 nm and 525-560 nm were key for piranhas and pacus (Figure S3).
+**Breakdown**:
+- **Step 1**: Compute $\alpha$ for all patch pairs within each fish (30 rows).
+- **Step 2**: Test differences with Kruskal-Wallis (overall) and Wilcoxon (pairwise).
+- **Step 3**: Boxplot—high angles = distinct pairs.
+- **Why**: Directly tests within-fish patch separation using all 81 bands.
+- **Link to Kolmann**: Uses their spectral angle (Equation 1), but not a direct figure match—extends to statistical testing of pairs, unlike their ACE focus (Figure 7).
+- **Key Takeaway**: High angles and low p-values (e.g., < 0.05) = distinguishable; low angles, high p-values = not.
 
-#### Spectral Resolution Comparison
-- **Simulated Data**: We have 81 bands (400-800 nm, 5 nm steps: 400, 405, ..., 800). Each band's "width" (resolution) is 5 nm, meaning it captures reflectance averaged over a 5 nm range around each point. This mimics a spectrometer taking snapshots every 5 nm.
-- **ULTRIS X50 Camera**: Our real data will use the Cubert ULTRIS X50, covering 350-1000 nm with ~164 bands, but we'll subset to 400-800 nm (~101 bands at 4 nm steps: 400, 404, ..., 800). Its filters have a ~10 nm width (FWHM), but data is binned every 4 nm. So, it's finer (4 nm vs. 5 nm steps) but slightly broader per band (~10 nm vs. 5 nm).
-- **Comparison**: Simulated data (81 bands, 5 nm) is coarser than ULTRIS (101 bands, 4 nm), potentially missing subtle shifts (e.g., a 472 nm peak might blur into 470-475 nm). ULTRIS's higher resolution could catch these, but its broader filters might smooth small differences. Both can find diagnostic bands, but ULTRIS might pinpoint them more precisely.
+## 3.2 Distance-Based Methods
+These measure total spectral differences, including amplitude, across all bands.
 
-**Why It Matters**: More bands (ULTRIS) mean more chances to spot diagnostic wavelengths, but broader bands might blend signals. Our simulated 5 nm steps are a good practice run, testing if we can find "key clues" with slightly less detail.
-
-### Alternative 1: Euclidean Distance
-How far apart are the "fingerprints" in total distance?
-
-```{r alt1-euclidean}
+### 3.2.1 Figure 3.2-1: Euclidean Distance
+```{r fig-3.2-1}
 euclidean_dist <- function(x, s) {
   sqrt(sum((x - s)^2, na.rm = TRUE))
 }
 
-euclid_data <- ace_data  # Reuse structure
+euclid_data <- ace_data
 for (i in 1:nrow(euclid_data)) {
   ind <- euclid_data$Individual[i]
   patch <- euclid_data$Patch[i]
   x <- as.numeric(mean_spectra[mean_spectra$Individual == ind & mean_spectra$Patch == patch, -(1:2)])
   s <- as.numeric(patch_means[patch_means$Patch == patch, -1])
-  euclid_data$Angle[i] <- euclidean_dist(x, s)  # Rename 'Angle' to 'Distance'
+  euclid_data$Angle[i] <- euclidean_dist(x, s)
 }
 colnames(euclid_data)[3] <- "Distance"
 
 ggplot(euclid_data, aes(x = Patch, y = Individual, fill = Distance)) +
   geom_tile() +
   scale_fill_gradient(low = "blue", high = "red", name = "Euclidean Distance") +
-  labs(title = "Figure 8: Euclidean Distance Analysis",
+  labs(title = "Figure 3.2-1: Euclidean Distance Analysis",
        x = "Target Patch", y = "Test Individual",
-       caption = "Euclidean distance between individual means and patch means. Within-fish variation is averaged; between-fish variation (e.g., fading) increases distance.") +
+       caption = "Euclidean distance between fish means (n=3) and patch means (n=15), using all 81 bands. Within-fish variation averaged; between-fish variation (e.g., fading) increases distance. Not in Kolmann et al. (2021)—complements their shape focus.") +
   theme_minimal()
 ```
 
 **Breakdown**:
-- **Step 1: Distance Calculation**
-  - **Code**: `euclidean_dist <- function(x, s) {...}`
-  - **What**: Subtract fish spectrum (\(\mathbf{x}\)) from patch mean (\(\mathbf{S}\)), square, sum, square root—total distance across all 81 bands.
-  - **Structure**: Same as `ace_data` (20 rows), replaces angle with distance.
-  - **Illustration**: Draw two points in space, connect with a line—length is distance.
-  - **Why**: Unlike spectral angle (shape only), this includes brightness differences, using all bands.
+- **Step 1**: Compute Euclidean distance across all 81 bands (20 rows).
+- **Step 2**: Heatmap—high distances = less typical.
+- **Why**: Captures total difference (shape + amplitude), unlike spectral angle.
+- **Link to Kolmann**: Not used in their paper—they focused on shape (ACE); this adds amplitude sensitivity.
+- **Key Takeaway**: High between-patch distances = distinguishable; overlap = not.
 
-- **Step 2: Plotting**
-  - **Code**: `ggplot(...)`
-  - **What**: Heatmap of distances—bigger numbers mean less "typical."
-  - **Why**: Shows how far each fish's patch is from the average—big distances might mean unique patches or fading.
+## 3.3 Principal Component Analysis (PCA)
+PCA reduces all 81 bands into key patterns.
 
-- **Expectations**:
-  - **Distinguishable**: High distances between patches, low within—patch "zones" separate clearly.
-  - **Not Distinguishable**: Distances overlap across patches—colors blend together.
-
-### Alternative 2: Principal Component Analysis (PCA)
-Can we squeeze all 81 bands into a simpler picture? PCA helps us find the main "directions" of variation in our spectral data.
-
-```{r alt2-pca}
-# Perform PCA on mean spectra
+### 3.3.1 Figure 3.3-1: PCA of Spectral Signatures
+```{r fig-3.3-1}
 spectra_matrix <- mean_spectra[, -(1:2)] %>% as.matrix()
 pca_result <- prcomp(spectra_matrix, scale. = TRUE)
-
-# Calculate variance explained
 var_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
 cumvar_explained <- cumsum(var_explained)
 
-# Create data frame for plotting scores
 pca_data <- as.data.frame(pca_result$x) %>%
   mutate(Individual = mean_spectra$Individual, Patch = mean_spectra$Patch)
 
-# Plot scores (PC1 vs PC2)
 ggplot(pca_data, aes(x = PC1, y = PC2, color = Patch, shape = Individual)) +
   geom_point(size = 3) +
   scale_color_manual(values = patch_colors) +
-  labs(title = "Figure 9A: PCA of Spectral Signatures",
-       x = paste0("PC1 (", round(var_explained[1], 1), "% variance explained)"),
-       y = paste0("PC2 (", round(var_explained[2], 1), "% variance explained)"),
-       caption = "PCA scores showing how patches cluster in reduced spectral space.") +
+  labs(title = "Figure 3.3-1: PCA of Spectral Signatures",
+       x = paste0("PC1 (", round(var_explained[1], 1), "% variance)"),
+       y = paste0("PC2 (", round(var_explained[2], 1), "% variance)"),
+       caption = "PCA scores from all 81 bands (n=20 spectra). Within-fish variation averaged; between-fish and within-fish patch differences drive separation. Not directly in Kolmann et al. (2021)—complements their spectral focus.") +
   theme_minimal()
 
-# Get wavelengths for loadings plot
-wavelengths <- as.numeric(colnames(spectra_matrix))
+cat("\nVariance Explained by PCs:\n")
+print(data.frame(PC = 1:5, Variance_Explained = round(var_explained[1:5], 1), Cumulative = round(cumvar_explained[1:5], 1)))
+```
 
-# Create loadings data frame
+**Breakdown**:
+- **Step 1**: `prcomp(...)` reduces 81 bands to PCs (20 rows × 2).
+- **Step 2**: Scatter plot—PC1 vs. PC2.
+- **Why**: Visualizes clustering using all spectral data.
+- **Link to Kolmann**: Not a direct figure match—they used spectral angle/ACE; PCA is a common hyperspectral tool, offering a different lens.
+- **Key Takeaway**: Separate clusters = distinguishable; overlap = not.
+
+### 3.3.2 Figure 3.3-2: PCA Loadings
+```{r fig-3.3-2}
+wavelengths <- as.numeric(colnames(spectra_matrix))
 loadings_data <- data.frame(
   Wavelength = wavelengths,
   PC1 = pca_result$rotation[,1],
@@ -336,22 +280,13 @@ loadings_data <- data.frame(
 ) %>%
   pivot_longer(cols = c(PC1, PC2), names_to = "Component", values_to = "Loading")
 
-# Plot loadings
 ggplot(loadings_data, aes(x = Wavelength, y = Loading, color = Component)) +
   geom_line() +
-  labs(title = "Figure 9B: PCA Loadings",
+  labs(title = "Figure 3.3-2: PCA Loadings",
        x = "Wavelength (nm)",
        y = "Loading",
-       caption = "Loadings show how each wavelength contributes to PC1 and PC2.") +
+       caption = "Loadings show how each wavelength contributes to PC1 and PC2. Peaks highlight diagnostic bands.") +
   theme_minimal()
-
-# Print variance explained summary
-cat("\nVariance Explained by Principal Components:\n")
-print(data.frame(
-  PC = 1:5,
-  Variance_Explained = round(var_explained[1:5], 1),
-  Cumulative_Variance = round(cumvar_explained[1:5], 1)
-))
 
 # Print top contributing wavelengths
 top_loadings <- function(rotation, n = 5) {
@@ -372,52 +307,15 @@ print(top_loadings(pca_result$rotation[,2]))
 ```
 
 **Breakdown**:
-- **Step 1: PCA Calculation**
-  - **Code**: `prcomp(spectra_matrix, scale. = TRUE)`
-  - **What**: Transforms our 81-dimensional spectra (400-800 nm) into new directions (Principal Components) that capture the most variation.
-  - **Structure**: From 20 rows × 81 columns to 20 rows × 2 main PCs.
-  - **Why Scale**: We standardize each wavelength (mean=0, SD=1) because reflectance values vary widely (10-90%).
+- **Step 1**: Extract loadings—how each wavelength contributes to PCs.
+- **Step 2**: Plot loadings and list top contributors.
+- **Why**: Identifies which wavelengths drive patch separation.
+- **Link to Kolmann**: Not used—they focused on spectral angles; this adds insight into key wavelengths.
+- **Key Takeaway**: Strong loadings = diagnostic bands; weak = less important.
 
-- **Step 2: Understanding the PCs**
-  - **PC1** explains 67.8% of total variance
-    - Represents overall brightness differences between patches
-    - Top contributing wavelengths (500-600 nm) correspond to the green-yellow region
-    - Positive loadings at these wavelengths separate brighter patches (White, Orange) from darker ones (Black)
-    - Negative loadings in the blue region (~450 nm) highlight the Blue patch's unique signature
-  
-  - **PC2** explains 24.3% of total variance
-    - Captures spectral shape differences independent of overall brightness
-    - Mainly influenced by wavelengths around 470 nm (Blue peak) and 620 nm (Orange peak)
-    - Helps separate Blue and Orange patches based on their characteristic peak locations
-    - Together with PC1, accounts for 92.1% of total spectral variation
-
-- **Step 3: Interpreting the Plot**
-  - **Score Plot (Fig 9A)**:
-    - Points = patches in PC-space, clearly separated into four groups
-    - Distance between points shows Black is most different (low PC1)
-    - White and Orange cluster high on PC1 (bright patches)
-    - PC2 effectively separates Blue from Orange based on peak wavelength
-    - Individual fish (shapes) show consistent patterns within patches
-
-  - **Loadings Plot (Fig 9B)**:
-    - PC1 loadings show broad positive values (brightness)
-    - PC2 loadings show contrasting blue vs. orange wavelength regions
-    - Key diagnostic wavelengths match our known patch features
-    - Loading patterns explain why patches separate as they do
-
-**Key Insights**:
-1. First two PCs explain 92.1% of variation - very strong reduction from 81 dimensions to 2
-2. PC1 mainly captures overall brightness differences, explaining why Black separates strongly
-3. PC2 highlights spectral shape differences, particularly Blue vs. Orange peak locations
-4. Patches cluster distinctly with minimal overlap, suggesting they are reliably distinguishable
-5. Most important wavelengths (470 nm, 620 nm) align perfectly with our known Blue and Orange patch features
-
-### Alternative 3: Mahalanobis Distance
-How far are patches, considering their "spread"?
-
-```{r alt3-mahalanobis}
+### 3.3.3 Figure 3.3-3: Mahalanobis Distance
+```{r fig-3.3-3}
 mahalanobis_dist <- function(x, mean_vec, cov_mat, lambda = 0.1) {
-  # Add regularization to covariance matrix
   n <- nrow(cov_mat)
   regularized_cov <- cov_mat + lambda * diag(n)
   diff <- x - mean_vec
@@ -425,7 +323,7 @@ mahalanobis_dist <- function(x, mean_vec, cov_mat, lambda = 0.1) {
 }
 
 mahal_data <- ace_data
-cov_mat <- cov(spectra_matrix)  # Covariance of all spectra
+cov_mat <- cov(spectra_matrix)
 for (i in 1:nrow(mahal_data)) {
   ind <- mahal_data$Individual[i]
   patch <- mahal_data$Patch[i]
@@ -438,57 +336,44 @@ colnames(mahal_data)[3] <- "Distance"
 ggplot(mahal_data, aes(x = Patch, y = Individual, fill = Distance)) +
   geom_tile() +
   scale_fill_gradient(low = "blue", high = "red", name = "Mahalanobis Distance") +
-  labs(title = "Figure 10: Mahalanobis Distance Analysis",
+  labs(title = "Figure 3.3-3: Mahalanobis Distance Analysis",
        x = "Target Patch", y = "Test Individual",
-       caption = "Mahalanobis distance between fish means and patch means, using regularized covariance. Within-fish variation is averaged; between-fish variation affects distances.") +
+       caption = "Mahalanobis distance between fish means (n=3) and patch means (n=15), using all 81 bands with covariance adjustment. Within-fish variation averaged; between-fish variation affects distances. Not in Kolmann et al. (2021)—extends distance with covariance.") +
   theme_minimal()
 ```
 
 **Breakdown**:
-- **Step 1: Distance Calculation**
-  - **Code**: `mahalanobis_dist <- function(...)`
-  - **What**: Adjusts Euclidean distance by covariance (like a "stretchy" ruler), using all 81 bands. We add a tiny tweak (regularization) to avoid math errors with our small dataset.
-  - **Structure**: 20 rows, distance column.
-  - **Illustration**: Draw an oval (covariance shape), measure distance from center—stretches with data spread.
-  - **Why**: Like ACE, considers how spectra vary together across all bands, not just point-to-point.
+- **Step 1**: Compute Mahalanobis distance with covariance (20 rows).
+- **Step 2**: Heatmap—adjusted distances.
+- **Why**: Like Euclidean but accounts for band correlations across all 81 bands.
+- **Link to Kolmann**: Not used—they used ACE's covariance; this is a related but distinct covariance approach.
+- **Key Takeaway**: High between, low within = distinguishable; similar distances = not.
 
-- **Step 2: Plotting**
-  - **Code**: `ggplot(...)`
-  - **What**: Heatmap of adjusted distances—bigger numbers mean more "unusual."
-  - **Why**: Shows how far each fish's patch is from the typical, adjusted for natural variation.
+## 3.4 Diagnostic Spectra Methods
+These focus on key "diagnostic" bands where patches differ most.
 
-- **Expectations**:
-  - **Distinguishable**: High distances between patches, low within—unique "zones" stand out.
-  - **Not Distinguishable**: Similar distances across patches—colors blend in "stretched" space.
-
-### Alternative 4: First Derivative Peak Analysis
-Find diagnostic bands where changes are biggest.
-
-```{r alt4-deriv-peaks}
-# Find top 5 bands with highest absolute derivative per patch
+### 3.4.1 Figure 3.4-1: Derivative Peak Analysis
+```{r fig-3.4-1}
 diag_bands <- fig5_data %>%
   group_by(Patch) %>%
   mutate(Abs_Deriv = abs(Deriv)) %>%
   arrange(desc(Abs_Deriv)) %>%
   slice_head(n = 5) %>%
   ungroup() %>%
-  distinct(Wavelength, .keep_all = TRUE)  # Unique bands
+  distinct(Wavelength, .keep_all = TRUE)
 
-# Plot the diagnostic bands on original spectra
 ggplot() +
   geom_line(data = fig3_data, aes(x = Wavelength, y = Mean, color = Patch)) +
   geom_point(data = diag_bands, aes(x = Wavelength, y = Mean, color = Patch), size = 3) +
   scale_color_manual(values = patch_colors) +
-  labs(title = "Diagnostic Bands from First Derivatives",
+  labs(title = "Figure 3.4-1A: Diagnostic Bands from Derivatives",
        x = "Wavelength (nm)", y = "Reflectance (%)",
-       caption = "Dots show diagnostic bands where reflectance changes fastest.") +
+       caption = "Dots mark diagnostic bands with highest change rates (n=15 per mean). Inspired by Kolmann et al. (2021) Figure 5—targets key wavelengths.") +
   theme_minimal()
 
-# Subset mean spectra to diagnostic bands
 diag_spectra <- mean_spectra[, c("Individual", "Patch", as.character(diag_bands$Wavelength))]
 diag_means <- patch_means[, c("Patch", as.character(diag_bands$Wavelength))]
 
-# Spectral angle on diagnostic bands
 deriv_data <- data.frame(
   Individual = rep(unique(data$Individual), each = length(patches)),
   Patch = rep(patches, n_ind),
@@ -506,42 +391,42 @@ for (i in 1:nrow(deriv_data)) {
 ggplot(deriv_data, aes(x = Patch, y = Individual, fill = Angle)) +
   geom_tile() +
   scale_fill_gradient(low = "blue", high = "red", name = "Spectral Angle (°)") +
-  labs(title = "Figure 11: Derivative Peak Analysis",
+  labs(title = "Figure 3.4-1B: Derivative Peak Analysis",
        x = "Target Patch", y = "Test Individual",
-       caption = paste("Spectral angles using", nrow(diag_bands), "diagnostic bands (e.g.,", paste(head(diag_bands$Wavelength, 3), collapse = ", "), "...).")) +
+       caption = paste("Spectral angles using", nrow(diag_bands), "diagnostic bands (e.g.,", paste(head(diag_bands$Wavelength, 3), collapse = ", "), "...). Within-fish variation averaged; between-fish variation increases angles.")) +
   theme_minimal()
 ```
 
-### Alternative 5: Band Selection via Variance
-Let's pick bands where patches naturally vary the most!
+**Breakdown**:
+- **Step 1**: Identify 5 peak derivative bands per patch, deduplicate (~15 bands).
+- **Step 2**: Plot bands on spectra (A); compute spectral angle on subset (B).
+- **Why**: Focuses on "action zones" (e.g., 470 nm) instead of all 81 bands.
+- **Link to Kolmann**: Builds on Figure 5 (derivatives)—they used this to find key regions, we extend to angle analysis.
+- **Key Takeaway**: Low within, high between = distinguishable with key bands; similar = not.
 
-```{r alt5-variance}
-# Calculate variance per wavelength across patches
+### 3.4.2 Figure 3.4-2: Variance-Based Band Analysis
+```{r fig-3.4-2}
 var_data <- mean_spectra %>%
   pivot_longer(cols = -c(Individual, Patch), names_to = "Wavelength", values_to = "Reflectance") %>%
   group_by(Wavelength) %>%
   summarise(Variance = var(Reflectance), .groups = "drop") %>%
   arrange(desc(Variance)) %>%
-  slice_head(n = 10)  # Top 10 bands
+  slice_head(n = 10)
 
-# Plot the high-variance bands on original spectra
-var_data_plot <- fig3_data %>%
-  dplyr::filter(Wavelength %in% var_data$Wavelength)
+var_data_plot <- fig3_data %>% dplyr::filter(Wavelength %in% var_data$Wavelength)
 
 ggplot() +
   geom_line(data = fig3_data, aes(x = Wavelength, y = Mean, color = Patch)) +
   geom_point(data = var_data_plot, aes(x = Wavelength, y = Mean, color = Patch), size = 3) +
   scale_color_manual(values = patch_colors) +
-  labs(title = "High-Variance Diagnostic Bands",
+  labs(title = "Figure 3.4-2A: High-Variance Diagnostic Bands",
        x = "Wavelength (nm)", y = "Reflectance (%)",
-       caption = "Dots show bands with highest variance across patches.") +
+       caption = "Dots mark 10 bands with highest variance across patches (n=20 spectra). Inspired by Kolmann et al. (2021)'s variance focus (e.g., Figure S3).") +
   theme_minimal()
 
-# Subset to high-variance bands
 var_spectra <- mean_spectra[, c("Individual", "Patch", var_data$Wavelength)]
 var_means <- patch_means[, c("Patch", var_data$Wavelength)]
 
-# Spectral angle on high-variance bands
 var_angle_data <- data.frame(
   Individual = rep(unique(data$Individual), each = length(patches)),
   Patch = rep(patches, n_ind),
@@ -559,58 +444,25 @@ for (i in 1:nrow(var_angle_data)) {
 ggplot(var_angle_data, aes(x = Patch, y = Individual, fill = Angle)) +
   geom_tile() +
   scale_fill_gradient(low = "blue", high = "red", name = "Spectral Angle (°)") +
-  labs(title = "Figure 12: Variance-Based Band Analysis",
+  labs(title = "Figure 3.4-2B: Variance-Based Band Analysis",
        x = "Target Patch", y = "Test Individual",
-       caption = paste("Spectral angles using 10 high-variance bands (e.g.,", paste(head(var_data$Wavelength, 3), collapse = ", "), "...).")) +
+       caption = paste("Spectral angles using 10 high-variance bands (e.g.,", paste(head(var_data$Wavelength, 3), collapse = ", "), "...). Within-fish variation averaged; between-fish variation increases angles.")) +
   theme_minimal()
 ```
 
-## Statistical Index for Patch Differences
-Are patches really different within each fish? Let's test it!
+**Breakdown**:
+- **Step 1**: Select 10 high-variance bands across all spectra.
+- **Step 2**: Plot bands on spectra (A); compute spectral angle on subset (B).
+- **Why**: Targets natural variation hotspots instead of all 81 bands.
+- **Link to Kolmann**: Echoes their variance analysis (Figure S3) for band selection, extended here to angle-based comparison.
+- **Key Takeaway**: Low within, high between = distinguishable with key bands; similar = not.
 
-```{r patch-stats}
-patch_pairs <- combn(patches, 2, paste, collapse = " vs. ")
-
-angle_data <- data.frame()
-for (ind in unique(data$Individual)) {
-  for (i in 1:(length(patches)-1)) {
-    for (j in (i+1):length(patches)) {
-      x <- as.numeric(mean_spectra[mean_spectra$Individual == ind & mean_spectra$Patch == patches[i], -(1:2)])
-      s <- as.numeric(mean_spectra[mean_spectra$Individual == ind & mean_spectra$Patch == patches[j], -(1:2)])
-      angle <- spectral_angle(x, s)
-      angle_data <- rbind(angle_data, 
-                          data.frame(Individual = ind,
-                                     Patch_Pair = paste(patches[i], "vs.", patches[j]),
-                                     Angle = angle))
-    }
-  }
-}
-
-# Kruskal-Wallis test
-kw_test <- kruskal.test(Angle ~ Patch_Pair, data = angle_data)
-print(kw_test)
-
-# Pairwise Wilcoxon tests
-pairwise <- pairwise.wilcox.test(angle_data$Angle, angle_data$Patch_Pair, p.adjust.method = "BH")
-print(pairwise)
-
-ggplot(angle_data, aes(x = Patch_Pair, y = Angle)) +
-  geom_boxplot(aes(fill = Patch_Pair)) +
-  scale_fill_manual(values = colorRampPalette(unname(patch_colors))(length(unique(angle_data$Patch_Pair)))) +
-  labs(title = "Figure 13: Spectral Angles Between Patch Pairs",
-       x = "Patch Pair", y = "Spectral Angle (°)",
-       caption = "Angles between patch pairs within fish. Kruskal-Wallis tests overall differences; pairwise p-values show which pairs stand out.") +
-  theme_minimal() + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-```
-
-## Notes for Undergrads
-
-- **Visual Aids**: Encourage sketching:
-  - Figure 3: Four curves with shaded bands.
-  - Figure 5: Slopes on those curves.
-  - Figure 6: Spaghetti lines per patch, red mean.
-  - Figures 7-10: Heatmaps—color intensity as "difference."
-  - Figure 11: Boxes with whiskers for pairs.
-- **Key Takeaway**: We're hunting for patch "fingerprints" within fish. Big differences (angles, distances) and small p-values mean we can tell White from Blue, etc. Small differences mean they're too alike.
-- **Why Structures Matter**: Long data (9720 rows) lets us zoom in/out; means (20 or 4 rows) simplify for equations like \(\alpha\) or distance—each step builds our detective case!
+# 4.0 Notes for Undergrads
+- **Visual Aids**: Sketch:
+  - 2.1-1: Four curves with bands.
+  - 2.2-1: Slopes on curves.
+  - 3.1-x: Heatmaps (angles) or boxplots (pairs).
+  - 3.2-x: Heatmaps (distances).
+  - 3.3-1: Dots in clusters.
+  - 3.4-x: Curves with diagnostic dots, heatmaps.
+- **Key Takeaway**: We're hunting patch "fingerprints" within fish. Big differences (angles, distances, clusters) and low p-values = distinguishable. Small differences = too alike. Each method offers a lens—spectral angle for shape, distance for total difference, PCA for patterns, diagnostic bands for key clues.
