@@ -1,82 +1,4 @@
-Your request makes perfect sense! I’ll create a simulated dataset for reflectance measurements of four color patches (white, black, orange, blue) in Picasso triggerfish (*Rhinecanthus aculeatus*), with biologically realistic reflectance curves across 400-800 nm for five individuals, each with three repeated measures per patch. The data will include low measurement error for repeated measures, inter-individual variation, and one individual with faded reflectance (without revealing which one). I’ll save the data as a CSV file and provide an R Markdown script that replicates the analyses and figures from Kolmann et al. (2021)—specifically Figures 3, 5, 6, and 7—while explaining the steps and equations, including Equations 1 and 2 from the paper. The R Markdown will be a guide for your real data analysis, downloadable and knittable.
 
-Here’s the plan:
-1. **Simulate Data**: Generate reflectance curves for white (structural), black, orange, and blue (pigmented) patches, with realistic shapes based on fish coloration literature, adding measurement error and individual variation.
-2. **Save CSV**: Export the data in a long-format CSV.
-3. **R Markdown**: Write a demo script with analysis steps, equations, and figures, mirroring the paper’s approach.
-4. **Downloadable Files**: Provide links to download the CSV and R Markdown.
-
-### Step 1: Simulate Reflectance Data
-I’ll simulate reflectance curves based on typical fish coloration:
-- **White (Structural)**: High reflectance across all wavelengths due to structural scattering, peaking slightly in the blue-green range (450-550 nm).
-- **Black (Pigmented)**: Low reflectance across all wavelengths, absorbing most light.
-- **Orange (Pigmented)**: Peak reflectance around 600-650 nm, dropping off at shorter and longer wavelengths.
-- **Blue (Pigmented)**: Peak reflectance around 450-500 nm, low elsewhere.
-
-For five individuals, three measures per patch, across 400-800 nm (5 nm intervals, 81 wavelengths):
-- **Measurement Error**: Add Gaussian noise (SD = 2% reflectance) to repeats.
-- **Individual Variation**: Adjust baseline reflectance (±10%) and slightly shift peak wavelengths (±20 nm).
-- **Faded Individual**: Reduce reflectance amplitude by 30% for one random individual.
-
-Here’s the R code to generate the data:
-
-```R
-set.seed(123)  # For reproducibility
-wavelengths <- seq(400, 800, by = 5)  # 81 wavelengths
-n_ind <- 5
-n_rep <- 3
-n_patch <- 4
-patches <- c("White", "Black", "Orange", "Blue")
-
-# Base reflectance curves (0-100% scale)
-white_base <- 80 * exp(-((wavelengths - 500)^2) / (2 * 100^2)) + 70  # Broad, high reflectance
-black_base <- rep(10, length(wavelengths))  # Low, flat reflectance
-orange_base <- 90 * exp(-((wavelengths - 620)^2) / (2 * 80^2))  # Peak at orange
-blue_base <- 85 * exp(-((wavelengths - 470)^2) / (2 * 60^2))  # Peak at blue
-
-# Function to add variation and error
-simulate_reflectance <- function(base_curve, ind_var, fade = FALSE) {
-  ind_curve <- base_curve * (1 + rnorm(1, 0, 0.1))  # Individual variation
-  if (fade) ind_curve <- ind_curve * 0.7  # Fade one individual
-  ind_curve <- ind_curve + rnorm(1, 0, 20) * (wavelengths - 500) / 1000  # Slight wavelength shift
-  ind_curve <- pmax(0, pmin(100, ind_curve))  # Clamp to 0-100%
-  reps <- replicate(n_rep, ind_curve + rnorm(length(wavelengths), 0, 2))  # Measurement error
-  return(reps)
-}
-
-# Generate data
-data_list <- list()
-fade_ind <- sample(1:n_ind, 1)  # Randomly select faded individual
-for (i in 1:n_ind) {
-  fade <- (i == fade_ind)
-  data_list[[i]] <- list(
-    White = simulate_reflectance(white_base, i, fade),
-    Black = simulate_reflectance(black_base, i, fade),
-    Orange = simulate_reflectance(orange_base, i, fade),
-    Blue = simulate_reflectance(blue_base, i, fade)
-  )
-}
-
-# Convert to long format
-data <- expand.grid(
-  Individual = paste0("Ind", 1:n_ind),
-  Patch = patches,
-  Replicate = 1:n_rep,
-  Wavelength = wavelengths
-)
-data$Reflectance <- numeric(nrow(data))
-for (i in 1:n_ind) {
-  for (p in patches) {
-    for (r in 1:n_rep) {
-      idx <- data$Individual == paste0("Ind", i) & data$Patch == p & data$Replicate == r
-      data$Reflectance[idx] <- data_list[[i]][[p]][, r]
-    }
-  }
-}
-
-# Save to CSV
-write.csv(data, "Picasso_Triggerfish_Reflectance.csv", row.names = FALSE)
-```
 
 ### Step 2: R Markdown Demo Script
 Below is an R Markdown script that analyzes the data and generates figures analogous to Kolmann et al. (2021), with explanations and equations.
@@ -95,7 +17,7 @@ library(tidyverse)
 library(ggplot2)
 library(gridExtra)
 library(signal)  # For derivatives
-library(hyperspec)  # For spectral angle (simplified ACE)
+library(hyperSpec)  # For spectral angle (simplified ACE)
 ```
 
 ## Overview
@@ -104,6 +26,8 @@ This demo analyzes simulated reflectance data for four color patches (White, Bla
 ## Load Data
 ```{r load-data}
 data <- read.csv("Picasso_Triggerfish_Reflectance.csv")
+patches <- unique(data$Patch)  # Define patches variable
+n_ind <- length(unique(data$Individual))  # Define number of individuals
 head(data)
 ```
 
@@ -143,14 +67,20 @@ Show individual variation for each patch, with mean in red.
 
 ```{r fig6}
 fig6_plots <- lapply(patches, function(p) {
-  p_data <- data %>% filter(Patch == p)
-  ggplot(p_data, aes(x = Wavelength, y = Reflectance, group = interaction(Individual, Replicate))) +
-    geom_line(alpha = 0.3) +
-    geom_line(data = p_data %>% group_by(Wavelength) %>% summarise(Mean = mean(Reflectance)),
-              aes(y = Mean), color = "red", size = 1) +
+  p_data <- subset(data, Patch == p)
+  mean_data <- aggregate(Reflectance ~ Wavelength, data = p_data, FUN = mean)
+  
+  ggplot() +
+    geom_line(data = p_data, 
+              aes(x = Wavelength, y = Reflectance, group = factor(paste(Individual, Replicate))),
+              alpha = 0.3) +
+    geom_line(data = mean_data,
+              aes(x = Wavelength, y = Reflectance),
+              color = "red", size = 1) +
     labs(title = p, x = "Wavelength (nm)", y = "Reflectance (%)") +
     theme_minimal()
 })
+
 grid.arrange(grobs = fig6_plots, ncol = 2)
 ```
 
@@ -173,20 +103,18 @@ Kolmann et al. (2021) use ACE to match spectral signatures, with spectral angle 
   Where \(\Sigma_b\) is the background covariance matrix, approximated here by all other spectra.
 
 ### Analysis
-Calculate spectral angles between each individual’s mean spectrum and the overall mean per patch.
+Calculate spectral angles between each individual's mean spectrum and the overall mean per patch.
 
 ```{r fig7}
 mean_spectra <- data %>%
   group_by(Individual, Patch, Wavelength) %>%
   summarise(Mean = mean(Reflectance), .groups = "drop") %>%
-  pivot_wider(names_from = Wavelength, values_from = Mean) %>%
-  select(-Individual, -Patch)
+  pivot_wider(names_from = Wavelength, values_from = Mean)
 
 patch_means <- data %>%
   group_by(Patch, Wavelength) %>%
   summarise(Mean = mean(Reflectance), .groups = "drop") %>%
-  pivot_wider(names_from = Wavelength, values_from = Mean) %>%
-  select(-Patch)
+  pivot_wider(names_from = Wavelength, values_from = Mean)
 
 # Simplified spectral angle calculation
 spectral_angle <- function(x, s) {
@@ -197,15 +125,16 @@ spectral_angle <- function(x, s) {
 }
 
 ace_data <- data.frame(
-  Individual = rep(paste0("Ind", 1:n_ind), each = n_patch),
+  Individual = rep(unique(data$Individual), each = length(patches)),
   Patch = rep(patches, n_ind),
-  Angle = numeric(n_ind * n_patch)
+  Angle = numeric(n_ind * length(patches))
 )
+
 for (i in 1:nrow(ace_data)) {
   ind <- ace_data$Individual[i]
   patch <- ace_data$Patch[i]
-  x <- mean_spectra[i, -c(1:2)] %>% unlist()
-  s <- patch_means[patches == patch, -1] %>% unlist()
+  x <- as.numeric(mean_spectra[mean_spectra$Individual == ind & mean_spectra$Patch == patch, -(1:2)])
+  s <- as.numeric(patch_means[patch_means$Patch == patch, -1])
   ace_data$Angle[i] <- spectral_angle(x, s)
 }
 
@@ -229,11 +158,11 @@ This template guides your real data analysis, focusing on spectral differences a
 - **CSV**: [Picasso_Triggerfish_Reflectance.csv](attachment://Picasso_Triggerfish_Reflectance.csv)
 - **R Markdown**: [Triggerfish_Reflectance_Analysis.Rmd](attachment://Triggerfish_Reflectance_Analysis.Rmd)
 
-(Note: Since I can’t attach files directly, you can copy the code above into a `.csv` and `.Rmd` file, respectively, and run them locally.)
+(Note: Since I can't attach files directly, you can copy the code above into a `.csv` and `.Rmd` file, respectively, and run them locally.)
 
 ### Notes
 - **Equations 1 and 2**: Equation 1 (spectral angle) measures similarity between spectra, used in Figure 7. Equation 2 (ACE statistic) incorporates background covariance, simplified here due to simulation constraints but explained for real data use.
-- **Faded Individual**: One individual’s reflectance is reduced by 30%; you can detect it via lower amplitude in Figure 6 or higher spectral angles in Figure 7.
-- **Dependencies**: Install `tidyverse`, `signal`, `hyperspec`, and `gridExtra` to run the script.
+- **Faded Individual**: One individual's reflectance is reduced by 30%; you can detect it via lower amplitude in Figure 6 or higher spectral angles in Figure 7.
+- **Dependencies**: Install `tidyverse`, `signal`, `hyperSpec`, and `gridExtra` to run the script.
 
 Let me know if you need adjustments or help running it!

@@ -1,0 +1,15 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.html
+*.pdf
+*.docx
+*.doc
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.tiff
+*.csv
+!Picasso_Triggerfish_Reflectance.csv  # Keep this specific CSV file
