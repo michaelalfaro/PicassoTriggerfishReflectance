@@ -186,7 +186,7 @@ colnames(euclid_data)[3] <- "Distance"
 ggplot(euclid_data, aes(x = Patch, y = Individual, fill = Distance)) +
   geom_tile() +
   scale_fill_gradient(low = "blue", high = "red", name = "Euclidean Distance") +
-  labs(title = "Alternative 1: Euclidean Distance",
+  labs(title = "Figure 8: Euclidean Distance Analysis",
        x = "Target Patch", y = "Test Individual",
        caption = "Euclidean distance between individual means and patch means. Within-individual variation is averaged; between-individual variation (e.g., fading) increases distance.") +
   theme_minimal()
@@ -205,7 +205,7 @@ pca_data <- as.data.frame(pca_result$x) %>%
 
 ggplot(pca_data, aes(x = PC1, y = PC2, color = Patch, shape = Individual)) +
   geom_point(size = 3) +
-  labs(title = "Alternative 2: PCA of Spectral Signatures",
+  labs(title = "Figure 9: PCA of Spectral Signatures",
        x = "PC1", y = "PC2",
        caption = "PCA on mean spectra per patch per individual. Within-individual variation is averaged; between-individual and within-fish patch differences drive separation.") +
   theme_minimal()
@@ -239,7 +239,7 @@ colnames(mahal_data)[3] <- "Distance"
 ggplot(mahal_data, aes(x = Patch, y = Individual, fill = Distance)) +
   geom_tile() +
   scale_fill_gradient(low = "blue", high = "red", name = "Mahalanobis Distance") +
-  labs(title = "Alternative 3: Mahalanobis Distance",
+  labs(title = "Figure 10: Mahalanobis Distance Analysis",
        x = "Target Patch", y = "Test Individual",
        caption = "Mahalanobis distance between individual means and patch means, using regularized covariance. Within-individual variation is averaged; between-individual variation affects distances.") +
   theme_minimal()
@@ -280,21 +280,8 @@ print(pairwise)
 
 ggplot(angle_data, aes(x = Patch_Pair, y = Angle)) +
   geom_boxplot() +
-  labs(title = "Spectral Angles Between Patch Pairs",
+  labs(title = "Figure 11: Spectral Angles Between Patch Pairs",
        x = "Patch Pair", y = "Spectral Angle (°)",
        caption = "Boxplots of spectral angles between patch pairs within individuals. Kruskal-Wallis test assesses overall differences; pairwise p-values indicate specific distinctions.") +
   theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
-
-## Summary of Discussion on ULTRIS X50 and ACE
-
-The ULTRIS X50 (400-800 nm, ~101 bands at 4 nm binning) increases spectral dimensions from 81 to 101, raising the minimum spectra for full ACE from 162-405 to 202-505. Sampling 3 patches per color (12 total) per individual with 3 replicates yields 36 spectra per fish; 20 individuals (720 spectra) suffice for ACE, prioritizing individuals over patches. The data cube's pixel richness allows averaging (e.g., 10,000 pixels per patch), reducing noise and enabling spectral angle alone to distinguish patches within fish, though ACE excels for subtle signals. Focus on patch differentiation supports spectral angle or alternatives (Euclidean, PCA, Mahalanobis), with statistical tests (e.g., Kruskal-Wallis, pairwise p-values) confirming distinctions.
-
-## Final Interpretation
-- **ACE**: Detects patch differences but is limited here; alternatives suffice.
-- **Euclidean**: Highlights amplitude shifts (e.g., fading).
-- **PCA**: Visualizes patch clustering within fish.
-- **Mahalanobis**: Adjusts for covariance, robust for patch separation.
-- **Stats**: Pairwise p-values confirm if patches are distinct within individuals.
-
-This template is ready for your real data—replace the CSV and adjust as needed.
